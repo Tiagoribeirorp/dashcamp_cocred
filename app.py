@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import openpyxl  # Já estava aqui
+import openpyxl
 
 st.set_page_config(page_title="Dashboard de Campanhas - SICOOB COCRED", layout="wide")
 
@@ -9,7 +9,6 @@ st.set_page_config(page_title="Dashboard de Campanhas - SICOOB COCRED", layout="
 # =========================================================
 @st.cache_data
 def carregar_dados():
-    # CORREÇÃO: Adicionar engine='openpyxl' para forçar usar a biblioteca
     df = pd.read_excel("jobs.xlsx", engine='openpyxl')
 
     # -------------------------
@@ -103,33 +102,91 @@ st.sidebar.caption("Os dados são atualizados automaticamente conforme o Excel."
 df_filtrado = df.copy()
 
 # -------------------------
-# Filtro por faixa de prazo
+# FILTRO POR INTERVALO DE DIAS (SLIDER) - NOVO!
 # -------------------------
-st.sidebar.subheader("Prazo")
-st.sidebar.caption("Filtra jobs por faixa de prazo.")
+st.sidebar.subheader("Intervalo de Prazo (dias)")
+st.sidebar.caption("Selecione o intervalo mínimo e máximo de dias.")
 
-faixas_ordem = [
-    "Prazo encerrado",
-    "1 a 5 dias",
-    "6 a 10 dias",
-    "Acima de 10 dias"
-]
+if "Prazo em dias" in df.columns:
+    # Encontrar valores mínimo e máximo (ignorando NaN e negativos)
+    prazos_validos = df["Prazo em dias"].dropna()
+    prazos_validos = prazos_validos[prazos_validos >= 0]
+    
+    if not prazos_validos.empty:
+        min_val = int(prazos_validos.min())
+        max_val = int(prazos_validos.max())
+        
+        # Garantir que max seja maior que min
+        if min_val == max_val:
+            max_val = min_val + 1
+        
+        # Slider de intervalo
+        intervalo = st.sidebar.slider(
+            "Selecione o intervalo:",
+            min_value=min_val,
+            max_value=max_val,
+            value=(min_val, max_val),
+            help=f"Filtrar jobs com prazo entre X e Y dias. Disponível: {min_val} a {max_val} dias"
+        )
+        
+        # Aplicar filtro de intervalo
+        min_dias, max_dias = intervalo
+        
+        # Filtrar por intervalo (inclui os limites)
+        mask_intervalo = (df_filtrado["Prazo em dias"] >= min_dias) & (df_filtrado["Prazo em dias"] <= max_dias)
+        
+        # Também incluir os "Prazo encerrado" se o usuário quiser ver
+        incluir_atrasados = st.sidebar.checkbox(
+            "Incluir prazos encerrados/vencidos", 
+            value=True,
+            help="Mostrar também jobs com prazo já vencido"
+        )
+        
+        if incluir_atrasados:
+            # Incluir prazos encerrados
+            mask_atrasados = (df_filtrado["Faixa de Prazo"] == "Prazo encerrado")
+            df_filtrado = df_filtrado[mask_intervalo | mask_atrasados]
+        else:
+            # Apenas o intervalo selecionado
+            df_filtrado = df_filtrado[mask_intervalo]
+        
+        # Mostrar estatísticas
+        st.sidebar.info(f"**Intervalo selecionado:** {min_dias} a {max_dias} dias")
+        
+    else:
+        st.sidebar.warning("Não há prazos válidos para filtrar")
+else:
+    st.sidebar.warning("Coluna 'Prazo em dias' não encontrada")
 
-faixas_disponiveis = df["Faixa de Prazo"].unique()
-faixas_sel = []
+# -------------------------
+# FILTRO POR FAIXA (OPCIONAL - mantém como checkbox)
+# -------------------------
+st.sidebar.subheader("Filtro por Situação")
+st.sidebar.caption("Filtre por situação específica do prazo.")
 
-for faixa in faixas_ordem:
-    if faixa in faixas_disponiveis:
+# Criar checkboxes para as situações
+situacoes_disponiveis = ["No prazo", "Atenção", "Atrasado"]
+situacoes_selecionadas = []
+
+for situacao in situacoes_disponiveis:
+    if situacao in df_filtrado["Semáforo"].unique():
         marcado = st.sidebar.checkbox(
-            faixa, value=True, key=f"faixa_{faixa}"
+            situacao, 
+            value=True, 
+            key=f"situacao_{situacao}",
+            help=f"Mostrar jobs com situação: {situacao}"
         )
         if marcado:
-            faixas_sel.append(faixa)
+            situacoes_selecionadas.append(situacao)
 
-df_filtrado = df_filtrado[df_filtrado["Faixa de Prazo"].isin(faixas_sel)]
+# Aplicar filtro de situação
+if situacoes_selecionadas:
+    df_filtrado = df_filtrado[df_filtrado["Semáforo"].isin(situacoes_selecionadas)]
+else:
+    st.sidebar.warning("Selecione pelo menos uma situação")
 
 # -------------------------
-# Função genérica checkbox
+# Função genérica checkbox (MANTIDA para outros filtros)
 # -------------------------
 def filtro_checkbox(coluna, titulo, legenda):
     valores = sorted(df[coluna].dropna().unique())
@@ -283,3 +340,16 @@ st.dataframe(
     df_filtrado.style.apply(destacar_semaforo, axis=1),
     use_container_width=True
 )
+
+# =========================================================
+# RESUMO DO FILTRO APLICADO
+# =========================================================
+with st.sidebar.expander("📊 Resumo do Filtro", expanded=False):
+    if "Prazo em dias" in df.columns:
+        st.write(f"**Jobs no intervalo:** {len(df_filtrado)}")
+        if not df_filtrado.empty:
+            st.write(f"**Prazo médio:** {df_filtrado['Prazo em dias'].mean():.1f} dias")
+            st.write(f"**Prazo mínimo:** {df_filtrado['Prazo em dias'].min():.0f} dias")
+            st.write(f"**Prazo máximo:** {df_filtrado['Prazo em dias'].max():.0f} dias")
+    
+    st.write(f"**Total filtrado:** {len(df_filtrado)} de {len(df)}")
