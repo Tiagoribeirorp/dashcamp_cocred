@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import openpyxl  # Já estava aqui
+import openpyxl
 
 st.set_page_config(page_title="Dashboard de Campanhas - SICOOB COCRED", layout="wide")
 
@@ -9,7 +9,6 @@ st.set_page_config(page_title="Dashboard de Campanhas - SICOOB COCRED", layout="
 # =========================================================
 @st.cache_data
 def carregar_dados():
-    # CORREÇÃO: Adicionar engine='openpyxl' para forçar usar a biblioteca
     df = pd.read_excel("jobs.xlsx", engine='openpyxl')
 
     # -------------------------
@@ -181,6 +180,7 @@ if len(atrasados) > 0:
 st.subheader("Resumo Geral")
 st.caption("Total de jobs por status operacional.")
 
+# Cores que funcionam em light/dark mode
 cores_status = {
     "Aprovado": "#00A859",        # Verde SICOOB
     "Em Produção": "#007A3D",     # Verde escuro
@@ -254,9 +254,11 @@ tabela_resumo = tabela_resumo.sort_values(
     ascending=[False, False]
 ).reset_index()
 
+# CORREÇÃO: Cores que funcionam em light/dark mode
 def destacar_campanha(row):
     if row["Atrasada"]:
-        return ["background-color:#FECACA"] * len(row)
+        # Vermelho claro no light, vermelho escuro no dark
+        return ["background-color: rgba(254, 202, 202, 0.3)"] * len(row)
     return [""] * len(row)
 
 st.dataframe(
@@ -267,19 +269,120 @@ st.dataframe(
 st.divider()
 
 # =========================================================
-# TABELA DETALHADA
+# TABELA DETALHADA - CORRIGIDA PARA LIGHT/DARK
 # =========================================================
 st.subheader("Detalhamento dos Jobs")
 st.caption("Dados completos conforme filtros aplicados.")
 
+# Função com cores adaptativas para light/dark mode
 def destacar_semaforo(row):
+    # Usar transparência para funcionar em ambos os modos
     if row["Semáforo"] == "Atrasado":
-        return ["background-color:#FECACA"] * len(row)
+        # Vermelho com transparência
+        return ["background-color: rgba(254, 202, 202, 0.3)"] * len(row)
     elif row["Semáforo"] == "Atenção":
-        return ["background-color:#DCFCE7"] * len(row)
+        # Amarelo com transparência
+        return ["background-color: rgba(255, 243, 205, 0.5)"] * len(row)
+    elif row["Semáforo"] == "No prazo":
+        # Verde com transparência
+        return ["background-color: rgba(209, 231, 221, 0.4)"] * len(row)
     return [""] * len(row)
 
+# Configurar o DataFrame com melhor formatação
+styled_df = df_filtrado.style.apply(destacar_semaforo, axis=1)
+
+# Adicionar formatação condicional para números
+if "Prazo em dias" in df_filtrado.columns:
+    styled_df = styled_df.format({
+        "Prazo em dias": "{:.0f}",
+    }, na_rep="N/A")
+
+# Configurações para melhor visualização
 st.dataframe(
-    df_filtrado.style.apply(destacar_semaforo, axis=1),
-    use_container_width=True
+    styled_df,
+    use_container_width=True,
+    height=600,  # Altura fixa com scroll
+    column_config={
+        "Prazo em dias": st.column_config.NumberColumn(
+            "Prazo (dias)",
+            help="Prazo em dias para conclusão",
+            format="%d"
+        ),
+        "Prioridade": st.column_config.TextColumn(
+            "Prioridade",
+            help="Nível de prioridade"
+        ),
+        "Status Operacional": st.column_config.TextColumn(
+            "Status",
+            help="Status operacional atual"
+        ),
+        "Semáforo": st.column_config.TextColumn(
+            "Situação",
+            help="Situação do prazo: Atrasado, Atenção ou No prazo"
+        )
+    },
+    hide_index=True  # Oculta o índice numérico
 )
+
+# =========================================================
+# ESTILO CSS ADAPTATIVO PARA LIGHT/DARK MODE
+# =========================================================
+st.markdown("""
+<style>
+    /* Estilos para a tabela que funcionam em light/dark mode */
+    .stDataFrame {
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+    
+    /* Garantir contraste de texto */
+    .stDataFrame [data-testid="stDataFrame"] {
+        color: var(--text-color) !important;
+    }
+    
+    /* Headers da tabela */
+    .stDataFrame th {
+        background-color: var(--background-color) !important;
+        color: var(--text-color) !important;
+        font-weight: bold !important;
+    }
+    
+    /* Células da tabela */
+    .stDataFrame td {
+        color: var(--text-color) !important;
+        border-color: var(--border-color) !important;
+    }
+    
+    /* Linhas alternadas (zebra striping) */
+    .stDataFrame tr:nth-child(even) {
+        background-color: rgba(0, 0, 0, 0.02) !important;
+    }
+    
+    /* Hover nas linhas */
+    .stDataFrame tr:hover {
+        background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# =========================================================
+# BOTÃO PARA ALTERNAR VISUALIZAÇÃO (OPCIONAL)
+# =========================================================
+with st.expander("⚙️ Configurações de visualização"):
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🔄 Atualizar dados"):
+            st.cache_data.clear()
+            st.rerun()
+    
+    with col2:
+        st.info("""
+        **Dicas:**
+        - Clique nos cabeçalhos para ordenar
+        - Use Ctrl+F para buscar na tabela
+        - Role para ver todas as colunas
+        """)
+    
+    # Estatísticas rápidas
+    st.caption(f"📊 Mostrando {len(df_filtrado)} de {len(df)} registros")
