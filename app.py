@@ -13,7 +13,6 @@ import numpy as np
 # =========================================================
 # CONFIGURAÇÕES INICIAIS
 # =========================================================
-# Configurar pandas para mostrar TUDO
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
@@ -22,29 +21,135 @@ pd.set_option('display.max_colwidth', None)
 st.set_page_config(
     page_title="Dashboard de Campanhas - SICOOB COCRED", 
     layout="wide",
-    page_icon="📊"
+    page_icon="📊",
+    initial_sidebar_state="expanded"
 )
+
+# =========================================================
+# CORES INSTITUCIONAIS COCRED
+# =========================================================
+CORES = {
+    'primaria': '#003366',      # Azul COCRED
+    'secundaria': '#00A3E0',    # Azul claro
+    'destaque': '#FF6600',      # Laranja
+    'sucesso': '#28A745',       # Verde
+    'atencao': '#FFC107',       # Amarelo
+    'perigo': '#DC3545',        # Vermelho
+    'neutra': '#6C757D',        # Cinza
+    'criacao': '#003366',       # Azul - Criações
+    'derivacao': '#00A3E0',     # Azul claro - Derivações
+    'extra': '#FF6600',         # Laranja - Extra Contrato
+    'campanha': '#28A745',      # Verde - Campanhas
+}
+
+# =========================================================
+# CSS CUSTOMIZADO PARA DARK/LIGHT MODE
+# =========================================================
+st.markdown("""
+<style>
+    /* Cards - Funcionam em ambos os temas */
+    .metric-card-cocred {
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin: 5px;
+        background: linear-gradient(135deg, #003366 0%, #00A3E0 100%);
+        color: white;
+    }
+    
+    .metric-card-criacao {
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin: 5px;
+        background: linear-gradient(135deg, #003366 0%, #002244 100%);
+        color: white;
+    }
+    
+    .metric-card-derivacao {
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin: 5px;
+        background: linear-gradient(135deg, #00A3E0 0%, #0077A3 100%);
+        color: white;
+    }
+    
+    .metric-card-extra {
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin: 5px;
+        background: linear-gradient(135deg, #FF6600 0%, #CC5200 100%);
+        color: white;
+    }
+    
+    .metric-card-campanha {
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin: 5px;
+        background: linear-gradient(135deg, #28A745 0%, #1E7E34 100%);
+        color: white;
+    }
+    
+    /* Container de informações - Adaptável */
+    .info-container-cocred {
+        background-color: rgba(0, 51, 102, 0.1);
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        border-left: 5px solid #003366;
+        color: inherit;
+    }
+    
+    /* Cards de resumo - Adaptáveis */
+    .resumo-card {
+        background-color: var(--background-color);
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        color: inherit;
+    }
+    
+    /* Títulos */
+    h1, h2, h3, h4, h5, h6 {
+        color: inherit !important;
+    }
+    
+    /* Texto */
+    p, span, div {
+        color: inherit;
+    }
+    
+    /* Links */
+    a {
+        color: #00A3E0 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # =========================================================
 # CONFIGURAÇÕES DA API
 # =========================================================
-
-# 1. CREDENCIAIS DA API
 MS_CLIENT_ID = st.secrets.get("MS_CLIENT_ID", "")
 MS_CLIENT_SECRET = st.secrets.get("MS_CLIENT_SECRET", "")
 MS_TENANT_ID = st.secrets.get("MS_TENANT_ID", "")
 
-# 2. INFORMAÇÕES DO EXCEL (CONFIGURADO CORRETAMENTE!)
 USUARIO_PRINCIPAL = "cristini.cordesco@ideatoreamericas.com"
 SHAREPOINT_FILE_ID = "01S7YQRRWMBXCV3AAHYZEIZGL55EPOZULE"
 SHEET_NAME = "Demandas ID"
 
 # =========================================================
-# 1. AUTENTICAÇÃO MICROSOFT GRAPH
+# AUTENTICAÇÃO
 # =========================================================
 @st.cache_resource
 def get_msal_app():
-    """Configura a aplicação MSAL"""
     if not all([MS_CLIENT_ID, MS_CLIENT_SECRET, MS_TENANT_ID]):
         st.error("❌ Credenciais da API não configuradas!")
         return None
@@ -61,9 +166,8 @@ def get_msal_app():
         st.error(f"❌ Erro MSAL: {str(e)}")
         return None
 
-@st.cache_data(ttl=1800)  # 30 minutos
+@st.cache_data(ttl=1800)
 def get_access_token():
-    """Obtém token de acesso"""
     app = get_msal_app()
     if not app:
         return None
@@ -78,15 +182,12 @@ def get_access_token():
         return None
 
 # =========================================================
-# 2. CARREGAR DADOS (VERSÃO OTIMIZADA)
+# CARREGAR DADOS
 # =========================================================
 @st.cache_data(ttl=60, show_spinner="🔄 Baixando dados do Excel...")
 def carregar_dados_excel_online():
-    """Carrega dados da aba 'Demandas ID' com cache curto"""
-    
     access_token = get_access_token()
     if not access_token:
-        st.error("❌ Token não disponível")
         return pd.DataFrame()
     
     file_url = f"https://graph.microsoft.com/v1.0/users/{USUARIO_PRINCIPAL}/drive/items/{SHAREPOINT_FILE_ID}/content"
@@ -111,17 +212,14 @@ def carregar_dados_excel_online():
                 df = pd.read_excel(excel_file, engine='openpyxl')
                 return df
         else:
-            st.error(f"❌ Erro {response.status_code}")
             return pd.DataFrame()
     except Exception as e:
-        st.error(f"❌ Erro: {str(e)}")
         return pd.DataFrame()
 
 # =========================================================
-# 3. FUNÇÕES AUXILIARES
+# FUNÇÕES AUXILIARES
 # =========================================================
 def calcular_altura_tabela(num_linhas, num_colunas):
-    """Calcula altura ideal para a tabela"""
     altura_base = 150
     altura_por_linha = 35
     altura_por_coluna = 2
@@ -130,7 +228,6 @@ def calcular_altura_tabela(num_linhas, num_colunas):
     return min(altura_conteudo, altura_maxima)
 
 def converter_para_data(df, coluna):
-    """Converte coluna para datetime se possível"""
     try:
         df[coluna] = pd.to_datetime(df[coluna], errors='coerce', dayfirst=True)
     except:
@@ -138,7 +235,6 @@ def converter_para_data(df, coluna):
     return df
 
 def extrair_tipo_demanda(df, texto):
-    """Extrai contagem de demandas por tipo"""
     count = 0
     for col in df.columns:
         if df[col].dtype == 'object':
@@ -149,15 +245,13 @@ def extrair_tipo_demanda(df, texto):
     return count
 
 # =========================================================
-# 4. CARREGAR DADOS PRIMEIRO
+# CARREGAR DADOS
 # =========================================================
-
 with st.spinner("📥 Carregando dados do Excel..."):
     df = carregar_dados_excel_online()
 
-# Fallback para dados de exemplo realistas
 if df.empty:
-    st.warning("⚠️ Não foi possível carregar os dados do SharePoint. Usando dados de exemplo realistas...")
+    st.warning("⚠️ Não foi possível carregar os dados do SharePoint. Usando dados de exemplo...")
     
     dados_exemplo = {
         'ID': range(1, 501),
@@ -183,29 +277,24 @@ if 'Data de Solicitação' in df.columns:
         df['Data de Solicitação'] = df['Data de Solicitação'].dt.tz_localize(None)
 
 # =========================================================
-# 5. CALCULAR MÉTRICAS GLOBAIS
+# CALCULAR MÉTRICAS
 # =========================================================
-
 total_linhas = len(df)
 total_colunas = len(df.columns)
 
-# Métricas de Status
 total_concluidos = 0
 if 'Status' in df.columns:
     total_concluidos = len(df[df['Status'].str.contains('Concluído|Aprovado', na=False, case=False)])
 
-# Métricas de Prioridade
 total_alta = 0
 if 'Prioridade' in df.columns:
     total_alta = len(df[df['Prioridade'].str.contains('Alta', na=False, case=False)])
 
-# Métricas de Data
 total_hoje = 0
 if 'Data de Solicitação' in df.columns:
     hoje = datetime.now().date()
     total_hoje = len(df[pd.to_datetime(df['Data de Solicitação']).dt.date == hoje])
 
-# Métricas de Tipo
 if 'Tipo' in df.columns:
     criacoes = len(df[df['Tipo'].str.contains('Criação|Criacao', na=False, case=False)])
     derivacoes = len(df[df['Tipo'].str.contains('Derivação|Derivacao|Peça|Peca', na=False, case=False)])
@@ -215,21 +304,19 @@ else:
     derivacoes = extrair_tipo_demanda(df, 'Derivação|Derivacao|Peça|Peca')
     extra_contrato = extrair_tipo_demanda(df, 'Extra|Contrato')
 
-# Campanhas únicas
 if 'Campanha' in df.columns:
     campanhas_unicas = df['Campanha'].nunique()
 else:
     campanhas_unicas = len(df['ID'].unique()) // 50 if 'ID' in df.columns else 12
 
 # =========================================================
-# 6. SIDEBAR COMPLETA
+# SIDEBAR
 # =========================================================
-
 with st.sidebar:
     st.markdown("""
     <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="color: #667eea; font-size: 28px; margin: 0;">📊 COCRED</h1>
-        <p style="color: #666; font-size: 12px; margin: 0;">Dashboard de Campanhas</p>
+        <h1 style="color: #003366; font-size: 28px; margin: 0;">📊 COCRED</h1>
+        <p style="color: #00A3E0; font-size: 12px; margin: 0;">Dashboard de Campanhas</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -267,15 +354,10 @@ with st.sidebar:
     linhas_por_pagina = st.selectbox(
         "📋 Linhas por página:",
         ["50", "100", "200", "500", "Todas"],
-        index=1,
-        help="Quantidade de registros exibidos por vez na tabela"
+        index=1
     )
     
-    modo_compacto = st.checkbox(
-        "📏 Modo compacto",
-        value=False,
-        help="Reduz espaçamentos para mostrar mais informações"
-    )
+    modo_compacto = st.checkbox("📏 Modo compacto", value=False)
     
     if modo_compacto:
         st.markdown("""
@@ -331,19 +413,27 @@ with st.sidebar:
     st.divider()
     
     st.markdown("""
-    <div style="text-align: center; color: #666; font-size: 11px; padding: 10px 0;">
+    <div style="text-align: center; color: #6C757D; font-size: 11px; padding: 10px 0;">
         <p style="margin: 0;">Desenvolvido para</p>
-        <p style="margin: 0; font-weight: bold; color: #667eea;">SICOOB COCRED</p>
+        <p style="margin: 0; font-weight: bold; color: #003366;">SICOOB COCRED</p>
         <p style="margin: 5px 0 0 0;">© 2026 - Ideatore</p>
-        <p style="margin: 5px 0 0 0;">v4.0.0</p>
+        <p style="margin: 5px 0 0 0;">v4.1.0</p>
     </div>
     """, unsafe_allow_html=True)
 
 # =========================================================
-# 7. INTERFACE PRINCIPAL
+# INTERFACE PRINCIPAL
 # =========================================================
 
-st.title("📊 Dashboard de Campanhas – SICOOB COCRED")
+st.markdown(f"""
+<div style="display: flex; align-items: center; margin-bottom: 20px;">
+    <h1 style="color: #003366; margin: 0;">📊 Dashboard de Campanhas</h1>
+    <span style="background: #00A3E0; color: white; padding: 5px 15px; border-radius: 20px; margin-left: 20px; font-size: 14px;">
+        SICOOB COCRED
+    </span>
+</div>
+""", unsafe_allow_html=True)
+
 st.caption(f"🔗 Conectado ao Excel Online | Aba: {SHEET_NAME}")
 
 st.success(f"✅ **{total_linhas} registros** carregados com sucesso!")
@@ -352,9 +442,8 @@ st.info(f"📋 **Colunas:** {', '.join(df.columns.tolist()[:5])}{'...' if len(df
 st.header("📋 Análise de Dados")
 
 # =========================================================
-# 8. TABS PRINCIPAIS
+# TABS
 # =========================================================
-
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Dados Completos", 
     "📈 Análise Estratégica", 
@@ -365,7 +454,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # =========================================================
 # TAB 1: DADOS COMPLETOS
 # =========================================================
-
 with tab1:
     if linhas_por_pagina == "Todas":
         altura_tabela = calcular_altura_tabela(total_linhas, total_colunas)
@@ -410,17 +498,19 @@ with tab1:
         st.dataframe(df.iloc[inicio:fim], height=altura_pagina, use_container_width=True, hide_index=False)
 
 # =========================================================
-# TAB 2: ANÁLISE ESTRATÉGICA (REFORMULADA COM DESCRIÇÕES!)
+# TAB 2: ANÁLISE ESTRATÉGICA (COM PLOTLY DARK MODE)
 # =========================================================
-
 with tab2:
-    st.subheader("📈 Análise Estratégica")
+    st.markdown("## 📈 Análise Estratégica")
     
-    # ========== 1. MÉTRICAS DE NEGÓCIO COM DESCRIÇÕES ==========
+    # Configurações de template para Plotly (funciona em dark/light)
+    plotly_template = 'plotly_white' if not st.get_option('theme.base') == 'dark' else 'plotly_dark'
+    
+    # ========== 1. MÉTRICAS DE NEGÓCIO ==========
     st.markdown("""
-    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
-        <p style="margin: 0; color: #2c3e50; font-size: 14px;">
-            <strong>🎯 Indicadores de Performance</strong> - Acompanhe os principais KPIs do negócio e entenda a saúde das operações.
+    <div class="info-container-cocred">
+        <p style="margin: 0; font-size: 14px;">
+            <strong>🎯 Indicadores de Performance</strong> - Acompanhe os principais KPIs do negócio.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -430,26 +520,24 @@ with tab2:
     with col_metric1:
         taxa_conclusao = (total_concluidos / total_linhas * 100) if total_linhas > 0 else 0
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #00b09b, #96c93d);
-                    border-radius: 15px; padding: 20px; color: white; text-align: center;">
+        <div class="metric-card-cocred">
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">✅ TAXA DE CONCLUSÃO</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{taxa_conclusao:.1f}%</p>
             <p style="font-size: 12px; margin: 0;">{total_concluidos} de {total_linhas} concluídos</p>
             <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
-                📌 Percentual de demandas finalizadas com sucesso
+                📌 Percentual de demandas finalizadas
             </p>
         </div>
         """, unsafe_allow_html=True)
     
     with col_metric2:
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #fa709a, #fee140);
-                    border-radius: 15px; padding: 20px; color: white; text-align: center;">
+        <div class="metric-card-cocred" style="background: linear-gradient(135deg, #00A3E0 0%, #0077A3 100%);">
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">⏱️ TEMPO MÉDIO</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">4.2 dias</p>
             <p style="font-size: 12px; margin: 0;">da solicitação à entrega</p>
             <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
-                📌 Tempo médio entre criação e conclusão
+                📌 Tempo médio de execução
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -460,13 +548,12 @@ with tab2:
         else:
             media_solicitante = total_linhas / 9
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #5f2c82, #49a09d);
-                    border-radius: 15px; padding: 20px; color: white; text-align: center;">
+        <div class="metric-card-cocred" style="background: linear-gradient(135deg, #28A745 0%, #1E7E34 100%);">
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">👥 MÉDIA POR SOLICITANTE</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{media_solicitante:.1f}</p>
             <p style="font-size: 12px; margin: 0;">demandas por pessoa</p>
             <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
-                📌 Volume médio de solicitações por usuário
+                📌 Volume médio por usuário
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -474,24 +561,23 @@ with tab2:
     with col_metric4:
         perc_alta = (total_alta / total_linhas * 100) if total_linhas > 0 else 0
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #eb3349, #f45c43);
-                    border-radius: 15px; padding: 20px; color: white; text-align: center;">
+        <div class="metric-card-cocred" style="background: linear-gradient(135deg, #DC3545 0%, #B22222 100%);">
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">🔴 URGÊNCIA</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{perc_alta:.0f}%</p>
             <p style="font-size: 12px; margin: 0;">prioridade alta</p>
             <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
-                📌 Percentual de demandas com prioridade alta
+                📌 Demandas com prioridade alta
             </p>
         </div>
         """, unsafe_allow_html=True)
     
     st.divider()
     
-    # ========== 2. ANÁLISE POR STATUS COM DESCRIÇÃO ==========
+    # ========== 2. ANÁLISE POR STATUS ==========
     st.markdown("""
-    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
-        <p style="margin: 0; color: #2c3e50; font-size: 14px;">
-            <strong>📊 Fluxo de Trabalho</strong> - Visualize a distribuição das demandas por estágio e identifique gargalos no processo.
+    <div class="info-container-cocred">
+        <p style="margin: 0; font-size: 14px;">
+            <strong>📊 Fluxo de Trabalho</strong> - Distribuição das demandas por estágio e gargalos.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -514,12 +600,21 @@ with tab2:
                 orientation='h',
                 title='Demandas por Status',
                 color='Quantidade',
-                color_continuous_scale='viridis',
-                text='Quantidade'
+                color_continuous_scale='Blues',
+                text='Quantidade',
+                template=plotly_template
             )
-            fig_status.update_traces(textposition='outside')
-            fig_status.update_layout(height=400, xaxis_title="Quantidade", yaxis_title="", showlegend=False)
-            st.plotly_chart(fig_status, use_container_width=True)
+            fig_status.update_traces(textposition='outside', textfont_color='inherit')
+            fig_status.update_layout(
+                height=400,
+                xaxis_title="Quantidade",
+                yaxis_title="",
+                showlegend=False,
+                font=dict(color='inherit'),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig_status, use_container_width=True, config={'displayModeBar': False})
     
     with col_status2:
         if 'Status' in df.columns:
@@ -532,8 +627,8 @@ with tab2:
             gargalo_valor = producao if producao > aguardando else aguardando
             
             st.markdown(f"""
-            <div style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h4 style="color: #2c3e50; margin-top: 0;">📋 Resumo do Fluxo</h4>
+            <div class="resumo-card">
+                <h4 style="color: #003366; margin-top: 0;">📋 Resumo do Fluxo</h4>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                     <span>⏳ Aguardando:</span>
                     <span style="font-weight: bold;">{aguardando}</span>
@@ -550,23 +645,20 @@ with tab2:
                     <span>🏁 Concluído:</span>
                     <span style="font-weight: bold;">{concluido}</span>
                 </div>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px;">
-                    <p style="margin: 0; color: #666;">📌 <strong>Gargalo identificado:</strong> {gargalo} ({gargalo_valor} demandas)</p>
-                    <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">
-                        {f'⚠️ Acumulado em produção - considerar redistribuição' if gargalo == 'Em Produção' else '⏳ Aguardando aprovação - revisar SLA'}
-                    </p>
+                <div style="background: rgba(0, 51, 102, 0.1); padding: 15px; border-radius: 10px; margin-top: 15px;">
+                    <p style="margin: 0; color: #003366;">📌 <strong>Gargalo:</strong> {gargalo} ({gargalo_valor})</p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
     
     st.divider()
     
-    # ========== 3. ANÁLISE POR SOLICITANTE COM DESCRIÇÃO ==========
+    # ========== 3. ANÁLISE POR SOLICITANTE ==========
     if 'Solicitante' in df.columns:
         st.markdown("""
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
-            <p style="margin: 0; color: #2c3e50; font-size: 14px;">
-                <strong>👥 Top Solicitantes</strong> - Identifique os principais demandantes e o volume de solicitações por usuário.
+        <div class="info-container-cocred">
+            <p style="margin: 0; font-size: 14px;">
+                <strong>👥 Top Solicitantes</strong> - Principais demandantes e volume por usuário.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -583,12 +675,21 @@ with tab2:
                 y='Quantidade',
                 title='Top 5 Solicitantes',
                 color='Quantidade',
-                color_continuous_scale='blues',
-                text='Quantidade'
+                color_continuous_scale='Blues',
+                text='Quantidade',
+                template=plotly_template
             )
-            fig_sol.update_traces(textposition='outside')
-            fig_sol.update_layout(height=350, xaxis_title="", yaxis_title="Número de Demandas", showlegend=False)
-            st.plotly_chart(fig_sol, use_container_width=True)
+            fig_sol.update_traces(textposition='outside', textfont_color='inherit')
+            fig_sol.update_layout(
+                height=350,
+                xaxis_title="",
+                yaxis_title="Número de Demandas",
+                showlegend=False,
+                font=dict(color='inherit'),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig_sol, use_container_width=True, config={'displayModeBar': False})
         
         with col_sol2:
             media_sol = df['Solicitante'].value_counts().mean()
@@ -596,25 +697,22 @@ with tab2:
             nome_maior = df['Solicitante'].value_counts().index[0]
             
             st.markdown(f"""
-            <div style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); height: 350px;">
-                <h4 style="color: #2c3e50; margin-top: 0;">📊 Análise de Demanda</h4>
+            <div class="resumo-card" style="height: 350px;">
+                <h4 style="color: #003366; margin-top: 0;">📊 Análise de Demanda</h4>
                 <div style="text-align: center; margin: 20px 0;">
-                    <div style="background: #667eea; color: white; border-radius: 50%; width: 80px; height: 80px; 
+                    <div style="background: #003366; color: white; border-radius: 50%; width: 80px; height: 80px; 
                                 display: flex; align-items: center; justify-content: center; margin: 0 auto;">
                         <span style="font-size: 36px;">👤</span>
                     </div>
-                    <h3 style="margin: 10px 0 5px 0;">{nome_maior}</h3>
-                    <p style="color: #666; margin: 0;">Maior demandante</p>
-                    <p style="font-size: 24px; font-weight: bold; margin: 10px 0; color: #667eea;">{maior_sol}</p>
-                    <p style="color: #666;">demandas</p>
+                    <h3 style="margin: 10px 0 5px 0; color: #003366;">{nome_maior}</h3>
+                    <p style="color: #6C757D; margin: 0;">Maior demandante</p>
+                    <p style="font-size: 24px; font-weight: bold; margin: 10px 0; color: #003366;">{maior_sol}</p>
+                    <p style="color: #6C757D;">demandas</p>
                 </div>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 10px;">
+                <div style="background: rgba(0, 51, 102, 0.1); padding: 15px; border-radius: 10px;">
                     <p style="margin: 0; display: flex; justify-content: space-between;">
                         <span>📊 Média geral:</span>
                         <span style="font-weight: bold;">{media_sol:.1f}</span>
-                    </p>
-                    <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">
-                        {f'🏆 {nome_maior} solicita {maior_sol/media_sol:.1f}x mais que a média' if media_sol > 0 else ''}
                     </p>
                 </div>
             </div>
@@ -622,12 +720,12 @@ with tab2:
     
     st.divider()
     
-    # ========== 4. ANÁLISE TEMPORAL COM DESCRIÇÃO ==========
+    # ========== 4. ANÁLISE TEMPORAL ==========
     if 'Data de Solicitação' in df.columns:
         st.markdown("""
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
-            <p style="margin: 0; color: #2c3e50; font-size: 14px;">
-                <strong>📅 Evolução das Solicitações</strong> - Acompanhe a tendência de demanda ao longo do tempo e a variação mensal.
+        <div class="info-container-cocred">
+            <p style="margin: 0; font-size: 14px;">
+                <strong>📅 Evolução das Solicitações</strong> - Tendência de demanda e variação mensal.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -645,11 +743,19 @@ with tab2:
                 y='Quantidade',
                 title='Últimos 6 meses',
                 markers=True,
-                line_shape='linear'
+                line_shape='linear',
+                template=plotly_template
             )
-            fig_evolucao.update_traces(line_color='#667eea', line_width=3)
-            fig_evolucao.update_layout(height=300, xaxis_title="", yaxis_title="Número de Solicitações")
-            st.plotly_chart(fig_evolucao, use_container_width=True)
+            fig_evolucao.update_traces(line_color='#003366', line_width=3, marker=dict(color='#00A3E0', size=8))
+            fig_evolucao.update_layout(
+                height=300,
+                xaxis_title="",
+                yaxis_title="Número de Solicitações",
+                font=dict(color='inherit'),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig_evolucao, use_container_width=True, config={'displayModeBar': False})
         
         with col_temp2:
             if len(evolucao) >= 2:
@@ -658,19 +764,16 @@ with tab2:
                 variacao = ((ultimo_mes - mes_anterior) / mes_anterior * 100) if mes_anterior > 0 else 0
                 
                 st.markdown(f"""
-                <div style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); height: 300px;">
-                    <h4 style="color: #2c3e50; margin-top: 0;">📈 Tendência</h4>
+                <div class="resumo-card" style="height: 300px;">
+                    <h4 style="color: #003366; margin-top: 0;">📈 Tendência</h4>
                     <div style="text-align: center; margin-top: 40px;">
-                        <div style="background: {'#28a745' if variacao >= 0 else '#dc3545'}; 
+                        <div style="background: {'#28A745' if variacao >= 0 else '#DC3545'}; 
                                     color: white; border-radius: 10px; padding: 20px;">
                             <p style="font-size: 14px; margin: 0; opacity: 0.9;">VS MÊS ANTERIOR</p>
                             <p style="font-size: 48px; font-weight: bold; margin: 0;">{variacao:+.1f}%</p>
                         </div>
-                        <p style="margin-top: 20px; color: #666;">
+                        <p style="margin-top: 20px; color: #6C757D;">
                             {ultimo_mes} solicitações no último mês
-                        </p>
-                        <p style="margin-top: 10px; color: #666; font-size: 12px;">
-                            {f'📈 Demanda em crescimento' if variacao > 0 else '📉 Demanda em queda'}
                         </p>
                     </div>
                 </div>
@@ -678,12 +781,12 @@ with tab2:
     
     st.divider()
     
-    # ========== 5. ANÁLISE DE PRODUÇÃO COM DESCRIÇÃO ==========
+    # ========== 5. ANÁLISE DE PRODUÇÃO ==========
     if 'Produção' in df.columns:
         st.markdown("""
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
-            <p style="margin: 0; color: #2c3e50; font-size: 14px;">
-                <strong>🏭 Distribuição Interna</strong> - Compare o volume de demandas entre as equipes Ideatore e Cocred.
+        <div class="info-container-cocred">
+            <p style="margin: 0; font-size: 14px;">
+                <strong>🏭 Distribuição Interna</strong> - Comparativo entre equipes Ideatore e Cocred.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -699,12 +802,32 @@ with tab2:
                 values='Quantidade',
                 names='Produção',
                 title='Demandas por Equipe',
-                color_discrete_sequence=['#667eea', '#f093fb'],
+                color='Produção',
+                color_discrete_map={'Ideatore': '#003366', 'Cocred': '#00A3E0'},
+                template=plotly_template,
                 hole=0.4
             )
-            fig_prod.update_traces(textposition='outside', textinfo='percent+label')
-            fig_prod.update_layout(height=300)
-            st.plotly_chart(fig_prod, use_container_width=True)
+            fig_prod.update_traces(
+                textposition='outside', 
+                textinfo='percent+label',
+                textfont_color='inherit',
+                marker=dict(line=dict(color='rgba(0,0,0,0)', width=0))
+            )
+            fig_prod.update_layout(
+                height=300,
+                font=dict(color='inherit'),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                showlegend=True,
+                legend=dict(
+                    orientation='h',
+                    yanchor='bottom',
+                    y=1.02,
+                    xanchor='right',
+                    x=1
+                )
+            )
+            st.plotly_chart(fig_prod, use_container_width=True, config={'displayModeBar': False})
         
         with col_prod2:
             ideatore = producao_counts[producao_counts['Produção'].str.contains('Ideatore', na=False)]['Quantidade'].sum() if any(producao_counts['Produção'].str.contains('Ideatore', na=False)) else 0
@@ -712,25 +835,22 @@ with tab2:
             total_prod = ideatore + cocred
             
             st.markdown(f"""
-            <div style="background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); height: 300px;">
-                <h4 style="color: #2c3e50; margin-top: 0;">⚖️ Comparativo</h4>
+            <div class="resumo-card" style="height: 300px;">
+                <h4 style="color: #003366; margin-top: 0;">⚖️ Comparativo</h4>
                 <div style="margin-top: 30px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
-                        <span style="font-weight: bold;">🏭 Ideatore:</span>
-                        <span style="font-size: 24px; font-weight: bold; color: #667eea;">{ideatore}</span>
+                        <span style="font-weight: bold; color: #003366;">🏭 Ideatore:</span>
+                        <span style="font-size: 24px; font-weight: bold; color: #003366;">{ideatore}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
-                        <span style="font-weight: bold;">🏢 Cocred:</span>
-                        <span style="font-size: 24px; font-weight: bold; color: #f093fb;">{cocred}</span>
+                        <span style="font-weight: bold; color: #00A3E0;">🏢 Cocred:</span>
+                        <span style="font-size: 24px; font-weight: bold; color: #00A3E0;">{cocred}</span>
                     </div>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 30px;">
-                        <p style="margin: 0; color: #666;">
+                    <div style="background: rgba(0, 51, 102, 0.1); padding: 15px; border-radius: 10px; margin-top: 30px;">
+                        <p style="margin: 0; color: #003366;">
                             📊 <strong>Distribuição:</strong><br>
                             Ideatore: {ideatore/total_prod*100:.0f}% | 
                             Cocred: {cocred/total_prod*100:.0f}%
-                        </p>
-                        <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">
-                            {f'🏆 Ideatore lidera em volume' if ideatore > cocred else '🏆 Cocred lidera em volume'}
                         </p>
                     </div>
                 </div>
@@ -740,7 +860,6 @@ with tab2:
 # =========================================================
 # TAB 3: PESQUISA
 # =========================================================
-
 with tab3:
     st.subheader("🔍 Pesquisa nos Dados")
     
@@ -771,19 +890,23 @@ with tab3:
         st.info("👆 Digite um termo acima para pesquisar nos dados")
 
 # =========================================================
-# TAB 4: KPIs COCRED (COM DESCRIÇÕES!)
+# TAB 4: KPIs COCRED (COM PLOTLY DARK MODE)
 # =========================================================
-
 with tab4:
-    st.subheader("🎯 KPIs - Campanhas COCRED")
+    st.markdown("## 🎯 KPIs - Campanhas COCRED")
     
-    # ========== DESCRIÇÃO INICIAL ==========
+    # Configurações de template para Plotly
+    plotly_template = 'plotly_white' if not st.get_option('theme.base') == 'dark' else 'plotly_dark'
+    
+    # ========== DESCRIÇÃO ==========
     st.markdown("""
-    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
-        <p style="margin: 0; color: #2c3e50; font-size: 14px;">
+    <div class="info-container-cocred">
+        <p style="margin: 0; font-size: 14px;">
             <strong>🎯 Indicadores Estratégicos</strong> - Acompanhe os principais volumes de produção: 
-            <strong>Criações</strong> (novas peças), <strong>Derivações</strong> (adaptações), 
-            <strong>Extra Contrato</strong> (demandas fora do escopo) e <strong>Campanhas Ativas</strong>.
+            <span style="color: #003366; font-weight: bold;">Criações</span> (novas peças), 
+            <span style="color: #00A3E0; font-weight: bold;">Derivações</span> (adaptações), 
+            <span style="color: #FF6600; font-weight: bold;">Extra Contrato</span> (fora do escopo) e 
+            <span style="color: #28A745; font-weight: bold;">Campanhas Ativas</span>.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -825,7 +948,7 @@ with tab4:
     total_kpi = len(df_kpi)
     st.divider()
     
-    # ========== CARDS DE KPIs COM DESCRIÇÕES ==========
+    # ========== CARDS DE KPIs ==========
     st.markdown("### 🎯 Indicadores Estratégicos")
     
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
@@ -840,13 +963,12 @@ with tab4:
     
     with col_kpi1:
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    border-radius: 15px; padding: 20px; color: white; text-align: center;">
+        <div class="metric-card-criacao">
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">🎨 CRIAÇÕES</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{criacoes_kpi}</p>
             <p style="font-size: 12px; margin: 0;">{percent_criacoes:.0f}% do total</p>
             <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
-                📌 Peças novas desenvolvidas do zero
+                📌 Peças novas desenvolvidas
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -861,8 +983,7 @@ with tab4:
     
     with col_kpi2:
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                    border-radius: 15px; padding: 20px; color: white; text-align: center;">
+        <div class="metric-card-derivacao">
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">🔄 DERIVAÇÕES</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{derivacoes_kpi}</p>
             <p style="font-size: 12px; margin: 0;">{percent_derivacoes:.0f}% do total</p>
@@ -882,13 +1003,12 @@ with tab4:
     
     with col_kpi3:
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-                    border-radius: 15px; padding: 20px; color: white; text-align: center;">
+        <div class="metric-card-extra">
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">📦 EXTRA CONTRATO</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{extra_kpi}</p>
             <p style="font-size: 12px; margin: 0;">{percent_extra:.0f}% do total</p>
             <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
-                📌 Demandas fora do escopo contratual
+                📌 Demandas fora do escopo
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -901,27 +1021,26 @@ with tab4:
     
     with col_kpi4:
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-                    border-radius: 15px; padding: 20px; color: white; text-align: center;">
+        <div class="metric-card-campanha">
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">🚀 CAMPANHAS</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{campanhas_kpi}</p>
             <p style="font-size: 12px; margin: 0;">ativas no período</p>
             <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
-                📌 Número de campanhas com demandas
+                📌 Campanhas com demandas
             </p>
         </div>
         """, unsafe_allow_html=True)
     
     st.divider()
     
-    # ========== GRÁFICOS COM DESCRIÇÕES ==========
+    # ========== GRÁFICOS ==========
     col_chart1, col_chart2 = st.columns([3, 2])
     
     with col_chart1:
         st.markdown("""
-        <div style="background: #f8f9fa; padding: 10px; border-radius: 10px; margin-bottom: 10px;">
-            <p style="margin: 0; color: #2c3e50; font-size: 13px;">
-                <strong>🏆 Top Campanhas</strong> - Rankings das campanhas com maior volume de demandas no período.
+        <div style="background: rgba(0, 51, 102, 0.1); padding: 10px; border-radius: 10px; margin-bottom: 10px;">
+            <p style="margin: 0; font-size: 13px;">
+                <strong style="color: #003366;">🏆 Top Campanhas</strong> - Rankings das campanhas com maior volume.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -946,18 +1065,25 @@ with tab4:
             orientation='h',
             title='Top Campanhas',
             color='Quantidade',
-            color_continuous_scale='blues',
-            text='Quantidade'
+            color_continuous_scale='Blues',
+            text='Quantidade',
+            template=plotly_template
         )
-        fig_campanhas.update_traces(textposition='outside')
-        fig_campanhas.update_layout(height=400, showlegend=False)
-        st.plotly_chart(fig_campanhas, use_container_width=True)
+        fig_campanhas.update_traces(textposition='outside', textfont_color='inherit')
+        fig_campanhas.update_layout(
+            height=400,
+            showlegend=False,
+            font=dict(color='inherit'),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig_campanhas, use_container_width=True, config={'displayModeBar': False})
     
     with col_chart2:
         st.markdown("""
-        <div style="background: #f8f9fa; padding: 10px; border-radius: 10px; margin-bottom: 10px;">
-            <p style="margin: 0; color: #2c3e50; font-size: 13px;">
-                <strong>🎯 Distribuição por Status</strong> - Como as demandas estão distribuídas nos diferentes estágios.
+        <div style="background: rgba(0, 51, 102, 0.1); padding: 10px; border-radius: 10px; margin-bottom: 10px;">
+            <p style="margin: 0; font-size: 13px;">
+                <strong style="color: #003366;">🎯 Distribuição por Status</strong> - Estágios das demandas.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -978,21 +1104,39 @@ with tab4:
             values='Quantidade',
             names='Status',
             title='Demandas por Status',
-            color_discrete_sequence=px.colors.sequential.Blues_r,
+            color_discrete_sequence=['#003366', '#00A3E0', '#FF6600', '#28A745'],
+            template=plotly_template,
             hole=0.4
         )
-        fig_status.update_traces(textposition='outside', textinfo='percent+label')
-        fig_status.update_layout(height=400)
-        st.plotly_chart(fig_status, use_container_width=True)
+        fig_status.update_traces(
+            textposition='outside', 
+            textinfo='percent+label',
+            textfont_color='inherit',
+            marker=dict(line=dict(color='rgba(0,0,0,0)', width=0))
+        )
+        fig_status.update_layout(
+            height=400,
+            font=dict(color='inherit'),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            showlegend=True,
+            legend=dict(
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='right',
+                x=1
+            )
+        )
+        st.plotly_chart(fig_status, use_container_width=True, config={'displayModeBar': False})
     
     st.divider()
     
-    # ========== TABELA DE DEMANDAS COM DESCRIÇÃO ==========
+    # ========== TABELA DE DEMANDAS ==========
     st.markdown("""
-    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
-        <p style="margin: 0; color: #2c3e50; font-size: 14px;">
-            <strong>📋 Demandas por Tipo de Atividade</strong> - Detalhamento do volume por tipo de atividade, 
-            com classificação de volume (alto, médio, baixo) para priorização.
+    <div class="info-container-cocred">
+        <p style="margin: 0; font-size: 14px;">
+            <strong>📋 Demandas por Tipo de Atividade</strong> - Detalhamento do volume por tipo, com classificação.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1012,13 +1156,18 @@ with tab4:
         
         tipo_counts['Status'] = tipo_counts['Quantidade'].apply(get_status)
         
-        st.dataframe(tipo_counts, use_container_width=True, height=350, hide_index=True,
-                    column_config={
-                        "Tipo de Atividade": "📌 Tipo de Atividade",
-                        "Quantidade": "🔢 Quantidade",
-                        "% do Total": "📊 % do Total",
-                        "Status": "🚦 Classificação"
-                    })
+        st.dataframe(
+            tipo_counts,
+            use_container_width=True,
+            height=350,
+            hide_index=True,
+            column_config={
+                "Tipo de Atividade": "📌 Tipo",
+                "Quantidade": "🔢 Quantidade",
+                "% do Total": "📊 %",
+                "Status": "🚦 Classificação"
+            }
+        )
     else:
         demandas_exemplo = pd.DataFrame({
             'Tipo de Atividade': ['Evento', 'Comunicado', 'Campanha Orgânica', 
@@ -1033,9 +1182,8 @@ with tab4:
         st.dataframe(demandas_exemplo, use_container_width=True, height=350, hide_index=True)
 
 # =========================================================
-# 9. FILTROS AVANÇADOS
+# FILTROS AVANÇADOS
 # =========================================================
-
 st.header("🎛️ Filtros Avançados")
 
 filtro_cols = st.columns(4)
@@ -1112,7 +1260,6 @@ with filtro_cols[3]:
 # =========================================================
 # APLICAR FILTROS
 # =========================================================
-
 df_filtrado = df.copy()
 
 for col, valor in filtros_ativos.items():
@@ -1142,9 +1289,8 @@ else:
     st.info("👆 Use os filtros acima para refinar os dados")
 
 # =========================================================
-# 10. EXPORTAÇÃO
+# EXPORTAÇÃO
 # =========================================================
-
 st.header("💾 Exportar Dados")
 
 df_exportar = df_filtrado if filtros_ativos and len(df_filtrado) > 0 else df
@@ -1174,9 +1320,8 @@ with col_exp3:
                       mime="application/json", use_container_width=True)
 
 # =========================================================
-# 11. DEBUG INFO
+# DEBUG INFO
 # =========================================================
-
 if st.session_state.debug_mode:
     st.sidebar.markdown("---")
     st.sidebar.markdown("**🐛 Debug Info:**")
@@ -1190,12 +1335,11 @@ if st.session_state.debug_mode:
         st.write(f"**Derivações:** {derivacoes}")
         st.write(f"**Extra Contrato:** {extra_contrato}")
         st.write(f"**Campanhas:** {campanhas_unicas}")
-        st.write(f"**Colunas:** {list(df.columns)}")
+        st.write(f"**Template Plotly:** {plotly_template}")
 
 # =========================================================
-# 12. RODAPÉ
+# RODAPÉ
 # =========================================================
-
 st.divider()
 
 footer_col1, footer_col2, footer_col3 = st.columns(3)
@@ -1207,12 +1351,16 @@ with footer_col2:
     st.caption(f"📊 {total_linhas} registros | {total_colunas} colunas")
 
 with footer_col3:
-    st.caption("📧 cristini.cordesco@ideatoreamericas.com | v4.0.0")
+    st.markdown("""
+    <div style="text-align: right;">
+        <span style="color: #003366; font-weight: bold;">SICOOB COCRED</span> | 
+        <span style="color: #6C757D;">v4.1.0</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 # =========================================================
-# 13. AUTO-REFRESH
+# AUTO-REFRESH
 # =========================================================
-
 if auto_refresh:
     refresh_placeholder = st.empty()
     for i in range(60, 0, -1):
