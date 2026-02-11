@@ -1,8 +1,8 @@
-# Para Microsoft Graph API completa
-streamlit>=1.28.0
-pandas>=2.0.0
-openpyxl>=3.1.0
-msal>=1.24.0
-requests>=2.31.0
-pytz>=2023.3
-numpy>=1.24.0          # Para pandas funcionar bem
+streamlit==1.54.0
+pandas==2.3.3
+requests==2.32.5
+msal==1.28.0
+openpyxl==3.1.5
+numpy==2.4.2
+pytz==2025.2
+python-dotenv==1.0.1

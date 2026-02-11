@@ -5,25 +5,21 @@ from io import BytesIO
 import msal
 from datetime import datetime
 import pytz
-import time
 
 # =========================================================
-# CONFIGURAÇÕES DA API (AJUSTE AQUI!)
+# CONFIGURAÇÕES DA API (ATUALIZE AQUI!)
 # =========================================================
 st.set_page_config(page_title="Dashboard de Campanhas - SICOOB COCRED", layout="wide")
 
 # 1. SUAS CREDENCIAIS DA GRAPH API (do Azure AD)
 MS_CLIENT_ID = st.secrets.get("MS_CLIENT_ID", "")        # Application ID
-MS_CLIENT_SECRET = st.secrets.get("MS_CLIENT_SECRET", "") # Secret VALUE
+MS_CLIENT_SECRET = st.secrets.get("MS_CLIENT_SECRET", "") # Secret VALUE (o valor, não o ID!)
 MS_TENANT_ID = st.secrets.get("MS_TENANT_ID", "")        # Directory ID
 
-# 2. INFORMAÇÕES DO SEU EXCEL ONLINE
-SHAREPOINT_FILE_ID = "IQDMDcVdgAfGSIyZfeke7NFkAatm3fhI0-X4r6gIPQJmosY"  # ID do arquivo
-SHEET_NAME = "Demandas ID"  # ← NOME DA ABA QUE VOCÊ MENCIONOU!
-
-# 3. SITE DO SHAREPOINT (do seu link)
-SHAREPOINT_SITE = "agenciaideatore.sharepoint.com"
-SHAREPOINT_SITE_PATH = "/personal/cristini_cordesco_ideatoreamericas_com"
+# 2. INFORMAÇÕES DO EXCEL ONLINE (CONFIGURAÇÃO CORRETA!)
+USUARIO_PRINCIPAL = "cristini.cordesco@ideatoreamericas.com"  # ← USUÁRIO COM PONTO!
+SHAREPOINT_FILE_ID = "01S7YQRRWMBXCV3AAHYZEIZGL55EPOZULE"     # ← NOVO FILE ID CORRETO
+SHEET_NAME = "Demandas ID"  # ← NOME DA ABA
 
 # =========================================================
 # 1. AUTENTICAÇÃO MICROSOFT GRAPH
@@ -81,7 +77,7 @@ def get_access_token():
         return None
 
 # =========================================================
-# 2. CARREGAR DADOS DO EXCEL ONLINE
+# 2. CARREGAR DADOS DO EXCEL ONLINE (FUNÇÃO CORRIGIDA)
 # =========================================================
 @st.cache_data(ttl=300)  # Cache de 5 minutos para os dados
 def carregar_dados_excel_online():
@@ -89,10 +85,11 @@ def carregar_dados_excel_online():
     
     access_token = get_access_token()
     if not access_token:
+        st.error("❌ Não foi possível obter token de acesso")
         return pd.DataFrame()
     
-    # URL para baixar o arquivo Excel
-    file_url = f"https://graph.microsoft.com/v1.0/drives/root/items/{SHAREPOINT_FILE_ID}/content"
+    # URL CORRETA para acessar o arquivo via Microsoft Graph
+    file_url = f"https://graph.microsoft.com/v1.0/users/{USUARIO_PRINCIPAL}/drive/items/{SHAREPOINT_FILE_ID}/content"
     
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -111,17 +108,18 @@ def carregar_dados_excel_online():
             # Tentar ler a aba específica "Demandas ID"
             try:
                 df = pd.read_excel(excel_file, sheet_name=SHEET_NAME, engine='openpyxl')
+                st.sidebar.success(f"✅ Aba '{SHEET_NAME}' carregada")
             except Exception as e:
-                st.warning(f"⚠️ Não encontrei aba '{SHEET_NAME}'. Tentando primeira aba...")
+                st.sidebar.warning(f"⚠️ Não encontrei aba '{SHEET_NAME}'. Tentando primeira aba...")
                 df = pd.read_excel(excel_file, engine='openpyxl')
             
             # Verificar se carregou dados
             if df.empty:
-                st.error(f"❌ A aba '{SHEET_NAME}' está vazia ou não encontrada.")
+                st.error(f"❌ O arquivo está vazia ou não contém dados.")
                 return pd.DataFrame()
             
             # Pegar informações do arquivo
-            metadata_url = f"https://graph.microsoft.com/v1.0/drives/root/items/{SHAREPOINT_FILE_ID}"
+            metadata_url = f"https://graph.microsoft.com/v1.0/users/{USUARIO_PRINCIPAL}/drive/items/{SHAREPOINT_FILE_ID}"
             meta_response = requests.get(metadata_url, headers=headers)
             
             if meta_response.status_code == 200:
@@ -133,43 +131,49 @@ def carregar_dados_excel_online():
                     dt = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
                     dt_brazil = dt.astimezone(pytz.timezone('America/Sao_Paulo'))
                     
-                    # Mostrar no sidebar
-                    st.sidebar.success(f"✅ Conectado: {SHEET_NAME}")
-                    st.sidebar.caption(f"📅 Última atualização: {dt_brazil.strftime('%d/%m %H:%M')}")
+                    # Mostrar informações de atualização
+                    st.sidebar.caption(f"📅 Última atualização: {dt_brazil.strftime('%d/%m/%Y %H:%M')}")
                     
                     # Mostrar quem modificou
                     modified_by = metadata.get('lastModifiedBy', {}).get('user', {}).get('displayName', '')
                     if modified_by:
                         st.sidebar.caption(f"👤 Por: {modified_by}")
             
-            st.sidebar.caption(f"📊 {len(df)} registros carregados")
+            # Informações do arquivo
+            st.sidebar.caption(f"📊 {len(df)} registros × {len(df.columns)} colunas")
             
             return df
             
         elif response.status_code == 404:
-            st.error("❌ Arquivo não encontrado no SharePoint")
-            st.info(f"Verifique o File ID: {SHAREPOINT_FILE_ID}")
+            st.error("❌ Arquivo não encontrado no OneDrive")
+            st.info(f"""
+            **Verifique:**
+            1. File ID: {SHAREPOINT_FILE_ID}
+            2. Usuário: {USUARIO_PRINCIPAL}
+            3. O arquivo ainda existe no OneDrive
+            """)
             
         elif response.status_code == 403:
             st.error("❌ Permissão negada")
             st.info("""
             **Solução:**
-            1. Verifique se o app tem permissão "Files.Read.All"
-            2. Confirme que deu "Admin Consent" no Azure AD
+            1. Verifique se o app tem permissão **"Files.Read.All"**
+            2. Confirme que deu **"Admin Consent"** no Azure AD
+            3. App Registration → API permissions → Files.Read.All
             """)
             
         elif response.status_code == 401:
-            st.error("❌ Token expirado")
+            st.error("❌ Token expirado ou inválido")
             st.cache_data.clear()  # Limpar cache para novo token
             
         else:
             st.error(f"❌ Erro HTTP {response.status_code}")
-            st.text(f"Resposta: {response.text[:200]}")
+            st.text(f"Detalhes: {response.text[:200]}")
         
         return pd.DataFrame()
         
     except requests.exceptions.Timeout:
-        st.error("⏱️ Timeout - Verifique sua conexão")
+        st.error("⏱️ Timeout - Verifique sua conexão com a internet")
         return pd.DataFrame()
         
     except Exception as e:
@@ -187,8 +191,8 @@ st.caption(f"🔗 Conectado ao Excel Online | Aba: {SHEET_NAME}")
 # Sidebar - Controles
 st.sidebar.header("⚙️ Controles")
 
-# Botão de atualização - CORRIGIDO AQUI (1ª ocorrência)
-if st.sidebar.button("🔄 Atualizar agora", width='stretch', type="primary"):  # <-- CORREÇÃO
+# Botão de atualização
+if st.sidebar.button("🔄 Atualizar agora", width='stretch', type="primary"):
     st.cache_data.clear()
     st.rerun()
 
@@ -196,8 +200,8 @@ if st.sidebar.button("🔄 Atualizar agora", width='stretch', type="primary"):  
 st.sidebar.markdown("---")
 st.sidebar.markdown("**🔗 Status da Conexão:**")
 
-# Testar conexão - CORRIGIDO AQUI (2ª ocorrência)
-if st.sidebar.button("🔍 Testar Conexão API", width='stretch'):  # <-- CORREÇÃO
+# Testar conexão
+if st.sidebar.button("🔍 Testar Conexão API", width='stretch'):
     token = get_access_token()
     if token:
         st.sidebar.success("✅ API: Conectada")
@@ -232,19 +236,19 @@ if df.empty:
     
     **Possíveis causas:**
     1. Credenciais da API não configuradas
-    2. Arquivo não encontrado no SharePoint
+    2. Arquivo não encontrado no OneDrive
     3. Permissões insuficientes
     4. Aba '{SHEET_NAME}' não existe
     """)
     
     # Mostrar configuração necessária
     with st.expander("🔧 Configuração necessária"):
-        st.markdown("""
+        st.markdown(f"""
         ### 1. Configure as Secrets no Streamlit Cloud:
         ```toml
-        MS_CLIENT_ID = "{seu-application-id}"
-        MS_CLIENT_SECRET = "{seu-secret-value}"
-        MS_TENANT_ID = "{seu-tenant-id}"
+        MS_CLIENT_ID = "2b3245ac-e6f7-4f70-beee-f78f5f31598e"
+        MS_CLIENT_SECRET = "sua-chave-secreta-aqui"
+        MS_TENANT_ID = "46d481f9-b227-467f-8b1a-b46734313c90"
         ```
         
         ### 2. Verifique no Azure AD:
@@ -252,20 +256,15 @@ if df.empty:
         - **Admin Consent** foi dado
         - Client secret está ativo
         
-        ### 3. Verifique o Excel Online:
-        - Arquivo existe no link acima
-        - Aba se chama **"{SHEET_NAME}"**
-        - Você tem acesso ao arquivo
+        ### 3. Verifique o OneDrive:
+        - Usuário: **{USUARIO_PRINCIPAL}**
+        - File ID: **{SHAREPOINT_FILE_ID}**
+        - Aba: **{SHEET_NAME}**
         """)
     
     # Fallback: Upload manual
     st.warning("⚠️ Enquanto isso, use upload manual:")
-    
-    # Uploader - CORRIGIDO AQUI (3ª ocorrência, se houver)
-    # Verificando se há mais botões ou componentes com use_container_width
-    # Parece que não há no uploader, mas se houver um botão aqui:
-    
-    uploaded_file = st.file_uploader("📤 Upload do Excel", type=["xlsx"])
+    uploaded_file = st.file_uploader("📤 Upload do Excel", type=["xlsx", "xls"])
     
     if uploaded_file:
         try:
@@ -278,43 +277,177 @@ if df.empty:
         st.stop()
 
 # =========================================================
-# 5. SEU PROCESSAMENTO ORIGINAL (MANTENHA SEU CÓDIGO AQUI!)
+# 5. PROCESSAMENTO DOS DADOS
 # =========================================================
-# COLE TODO O SEU CÓDIGO DE PROCESSAMENTO A PARTIR DAQUI
 
-# Exemplo do SEU tratamento (substitua pelo seu real):
+# Exemplo de tratamento - AJUSTE CONFORME SUA PLANILHA
+st.header("📈 Análise dos Dados")
+
+# Mostrar dataframe
+st.subheader("Dados Brutos")
+st.dataframe(df, width='stretch', height=400)
+
+# Estatísticas básicas
+st.subheader("📊 Estatísticas")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric("Total de Registros", len(df))
+
+with col2:
+    st.metric("Total de Colunas", len(df.columns))
+
+with col3:
+    # Verificar se há coluna de data
+    date_cols = [col for col in df.columns if 'data' in col.lower() or 'date' in col.lower()]
+    if date_cols:
+        try:
+            latest_date = pd.to_datetime(df[date_cols[0]]).max()
+            st.metric("Data Mais Recente", latest_date.strftime('%d/%m/%Y'))
+        except:
+            st.metric("Amostra", "5 registros")
+
+# Processamento específico para "Prazo em dias" (se existir)
 if "Prazo em dias" in df.columns:
+    st.subheader("⏱️ Análise de Prazos")
+    
+    # Converter para string e limpar
     df["Prazo em dias"] = df["Prazo em dias"].astype(str).str.strip()
     
+    # Classificar situação do prazo
     df["Situação do Prazo"] = df["Prazo em dias"].apply(
         lambda x: "Prazo encerrado" if "encerrado" in x.lower() else "Em prazo"
     )
     
+    # Tentar converter para numérico
     df["Prazo em dias"] = pd.to_numeric(df["Prazo em dias"], errors="coerce")
+    
+    # Mostrar distribuição
+    if not df["Situação do Prazo"].empty:
+        situacao_counts = df["Situação do Prazo"].value_counts()
+        st.bar_chart(situacao_counts)
 
-# ... Continue com TODO o seu código restante ...
+# Verificar outras colunas importantes
+st.subheader("🔍 Colunas Disponíveis")
 
-# ATENÇÃO: Se você tiver mais botões ou componentes Streamlit no seu código de processamento,
-# verifique e substitua use_container_width por width='stretch' ou width='content'
+# Listar todas as colunas
+cols = st.columns(3)
+for i, col_name in enumerate(df.columns):
+    with cols[i % 3]:
+        with st.expander(f"**{col_name}**"):
+            st.write(f"Tipo: {df[col_name].dtype}")
+            st.write(f"Valores únicos: {df[col_name].nunique()}")
+            st.write(f"Valores nulos: {df[col_name].isnull().sum()}")
+            
+            # Mostrar amostra
+            if df[col_name].dtype == 'object':
+                st.write("Amostra:", df[col_name].head(5).tolist())
 
 # =========================================================
-# 6. RODAPÉ COM INFORMAÇÕES
+# 6. FILTROS INTERATIVOS
+# =========================================================
+st.header("🎛️ Filtros")
+
+# Filtro por colunas específicas (se existirem)
+filtro_cols = st.columns(3)
+
+# Coluna 1: Filtro por tipo (se houver coluna 'Tipo' ou similar)
+tipo_cols = [col for col in df.columns if 'tipo' in col.lower() or 'categoria' in col.lower()]
+if tipo_cols:
+    with filtro_cols[0]:
+        tipos = df[tipo_cols[0]].dropna().unique()
+        selected_tipos = st.multiselect(f"Filtrar por {tipo_cols[0]}", options=tipos)
+        if selected_tipos:
+            df = df[df[tipo_cols[0]].isin(selected_tipos)]
+
+# Coluna 2: Filtro por status (se houver coluna 'Status' ou similar)
+status_cols = [col for col in df.columns if 'status' in col.lower() or 'situação' in col.lower()]
+if status_cols:
+    with filtro_cols[1]:
+        statuses = df[status_cols[0]].dropna().unique()
+        selected_status = st.multiselect(f"Filtrar por {status_cols[0]}", options=statuses)
+        if selected_status:
+            df = df[df[status_cols[0]].isin(selected_status)]
+
+# Coluna 3: Filtro por data (se houver coluna de data)
+date_cols = [col for col in df.columns if 'data' in col.lower() or 'date' in col.lower()]
+if date_cols:
+    with filtro_cols[2]:
+        try:
+            df[date_cols[0]] = pd.to_datetime(df[date_cols[0]], errors='coerce')
+            min_date = df[date_cols[0]].min()
+            max_date = df[date_cols[0]].max()
+            
+            if pd.notna(min_date) and pd.notna(max_date):
+                date_range = st.date_input(
+                    f"Filtrar por {date_cols[0]}",
+                    value=(min_date, max_date),
+                    min_value=min_date,
+                    max_value=max_date
+                )
+                
+                if len(date_range) == 2:
+                    start_date, end_date = date_range
+                    df = df[(df[date_cols[0]] >= pd.Timestamp(start_date)) & 
+                           (df[date_cols[0]] <= pd.Timestamp(end_date))]
+        except:
+            pass
+
+# Mostrar dados filtrados
+st.subheader("Dados Filtrados")
+st.dataframe(df, width='stretch', height=300)
+
+# =========================================================
+# 7. EXPORTAÇÃO DE DADOS
+# =========================================================
+st.header("💾 Exportar Dados")
+
+col_export1, col_export2 = st.columns(2)
+
+with col_export1:
+    # Exportar para CSV
+    csv = df.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        label="📥 Download CSV",
+        data=csv,
+        file_name=f"dados_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+        mime="text/csv",
+        width='stretch'
+    )
+
+with col_export2:
+    # Exportar para Excel
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Dados')
+    excel_data = output.getvalue()
+    
+    st.download_button(
+        label="📥 Download Excel",
+        data=excel_data,
+        file_name=f"dados_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        width='stretch'
+    )
+
+# =========================================================
+# 8. RODAPÉ COM INFORMAÇÕES
 # =========================================================
 st.divider()
 
-col1, col2, col3 = st.columns(3)
+col_footer1, col_footer2, col_footer3 = st.columns(3)
 
-with col1:
+with col_footer1:
     st.caption(f"📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-with col2:
+with col_footer2:
     st.caption("🔄 Atualização automática a cada 5min")
 
-with col3:
+with col_footer3:
     st.caption(f"📊 {len(df)} registros | Aba: {SHEET_NAME}")
 
 # =========================================================
-# 7. CONFIGURAÇÃO DAS SECRETS (instruções)
+# 9. CONFIGURAÇÃO DAS SECRETS (instruções)
 # =========================================================
 with st.sidebar.expander("⚙️ Configurar Secrets", expanded=False):
     st.markdown("""
@@ -324,13 +457,53 @@ with st.sidebar.expander("⚙️ Configurar Secrets", expanded=False):
     2. Clique em **Secrets**
     3. Cole:
     ```toml
-    MS_CLIENT_ID = "seu-application-id"
-    MS_CLIENT_SECRET = "seu-secret-value"
-    MS_TENANT_ID = "seu-tenant-id"
+    MS_CLIENT_ID = "2b3245ac-e6f7-4f70-beee-f78f5f31598e"
+    MS_CLIENT_SECRET = "sua-chave-secreta-aqui"
+    MS_TENANT_ID = "46d481f9-b227-467f-8b1a-b46734313c90"
     ```
     
-    ### Como obter:
-    - **MS_CLIENT_ID**: Application ID do Azure AD
-    - **MS_CLIENT_SECRET**: VALUE do client secret
-    - **MS_TENANT_ID**: Directory ID do Azure AD
+    ### Como obter as credenciais:
+    1. **MS_CLIENT_ID**: Application ID do Azure AD
+    2. **MS_CLIENT_SECRET**: VALUE do client secret (não o ID!)
+    3. **MS_TENANT_ID**: Directory ID do Azure AD
+    
+    ### Permissões necessárias no Azure AD:
+    - Files.Read.All (para ler arquivos do OneDrive)
+    - User.Read (permissão básica)
+    - Sites.Read.All (opcional, para SharePoint)
     """)
+    
+    st.markdown("---")
+    st.markdown("**🔧 Configuração atual:**")
+    st.code(f"""
+    Usuário: {USUARIO_PRINCIPAL}
+    File ID: {SHAREPOINT_FILE_ID}
+    Aba: {SHEET_NAME}
+    """)
+
+# =========================================================
+# 10. MODO DEBUG (apenas para desenvolvimento)
+# =========================================================
+if st.sidebar.checkbox("🐛 Modo Debug", value=False):
+    with st.sidebar.expander("Informações de Debug"):
+        st.write("**Configurações:**")
+        st.json({
+            "MS_CLIENT_ID": MS_CLIENT_ID[:8] + "..." if MS_CLIENT_ID else "Não configurado",
+            "MS_TENANT_ID": MS_TENANT_ID[:8] + "..." if MS_TENANT_ID else "Não configurado",
+            "USUARIO_PRINCIPAL": USUARIO_PRINCIPAL,
+            "SHAREPOINT_FILE_ID": SHAREPOINT_FILE_ID,
+            "SHEET_NAME": SHEET_NAME
+        })
+        
+        if not df.empty:
+            st.write("**Informações do DataFrame:**")
+            st.write(f"- Shape: {df.shape}")
+            st.write(f"- Colunas: {list(df.columns)}")
+            st.write(f"- Tipos de dados: {df.dtypes.to_dict()}")
+            
+            # Testar token
+            token = get_access_token()
+            if token:
+                st.success(f"Token ativo: ...{token[-10:]}")
+            else:
+                st.error("Token não disponível")
