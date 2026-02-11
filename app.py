@@ -410,13 +410,21 @@ with tab1:
         st.dataframe(df.iloc[inicio:fim], height=altura_pagina, use_container_width=True, hide_index=False)
 
 # =========================================================
-# TAB 2: ANÁLISE ESTRATÉGICA (REFORMULADA!)
+# TAB 2: ANÁLISE ESTRATÉGICA (REFORMULADA COM DESCRIÇÕES!)
 # =========================================================
 
 with tab2:
     st.subheader("📈 Análise Estratégica")
     
-    # ========== 1. MÉTRICAS DE NEGÓCIO ==========
+    # ========== 1. MÉTRICAS DE NEGÓCIO COM DESCRIÇÕES ==========
+    st.markdown("""
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
+        <p style="margin: 0; color: #2c3e50; font-size: 14px;">
+            <strong>🎯 Indicadores de Performance</strong> - Acompanhe os principais KPIs do negócio e entenda a saúde das operações.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     col_metric1, col_metric2, col_metric3, col_metric4 = st.columns(4)
     
     with col_metric1:
@@ -427,6 +435,9 @@ with tab2:
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">✅ TAXA DE CONCLUSÃO</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{taxa_conclusao:.1f}%</p>
             <p style="font-size: 12px; margin: 0;">{total_concluidos} de {total_linhas} concluídos</p>
+            <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
+                📌 Percentual de demandas finalizadas com sucesso
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -437,6 +448,9 @@ with tab2:
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">⏱️ TEMPO MÉDIO</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">4.2 dias</p>
             <p style="font-size: 12px; margin: 0;">da solicitação à entrega</p>
+            <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
+                📌 Tempo médio entre criação e conclusão
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -451,6 +465,9 @@ with tab2:
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">👥 MÉDIA POR SOLICITANTE</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{media_solicitante:.1f}</p>
             <p style="font-size: 12px; margin: 0;">demandas por pessoa</p>
+            <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
+                📌 Volume médio de solicitações por usuário
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -462,13 +479,22 @@ with tab2:
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">🔴 URGÊNCIA</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{perc_alta:.0f}%</p>
             <p style="font-size: 12px; margin: 0;">prioridade alta</p>
+            <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
+                📌 Percentual de demandas com prioridade alta
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
     st.divider()
     
-    # ========== 2. ANÁLISE POR STATUS ==========
-    st.markdown("### 📊 Distribuição do Fluxo de Trabalho")
+    # ========== 2. ANÁLISE POR STATUS COM DESCRIÇÃO ==========
+    st.markdown("""
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
+        <p style="margin: 0; color: #2c3e50; font-size: 14px;">
+            <strong>📊 Fluxo de Trabalho</strong> - Visualize a distribuição das demandas por estágio e identifique gargalos no processo.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     col_status1, col_status2 = st.columns([2, 1])
     
@@ -525,16 +551,25 @@ with tab2:
                     <span style="font-weight: bold;">{concluido}</span>
                 </div>
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px;">
-                    <p style="margin: 0; color: #666;">📌 <strong>Gargalo:</strong> {gargalo} ({gargalo_valor})</p>
+                    <p style="margin: 0; color: #666;">📌 <strong>Gargalo identificado:</strong> {gargalo} ({gargalo_valor} demandas)</p>
+                    <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">
+                        {f'⚠️ Acumulado em produção - considerar redistribuição' if gargalo == 'Em Produção' else '⏳ Aguardando aprovação - revisar SLA'}
+                    </p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
     
     st.divider()
     
-    # ========== 3. ANÁLISE POR SOLICITANTE ==========
+    # ========== 3. ANÁLISE POR SOLICITANTE COM DESCRIÇÃO ==========
     if 'Solicitante' in df.columns:
-        st.markdown("### 👥 Top Solicitantes")
+        st.markdown("""
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
+            <p style="margin: 0; color: #2c3e50; font-size: 14px;">
+                <strong>👥 Top Solicitantes</strong> - Identifique os principais demandantes e o volume de solicitações por usuário.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         col_sol1, col_sol2 = st.columns([2, 1])
         
@@ -578,15 +613,24 @@ with tab2:
                         <span>📊 Média geral:</span>
                         <span style="font-weight: bold;">{media_sol:.1f}</span>
                     </p>
+                    <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">
+                        {f'🏆 {nome_maior} solicita {maior_sol/media_sol:.1f}x mais que a média' if media_sol > 0 else ''}
+                    </p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
     
     st.divider()
     
-    # ========== 4. ANÁLISE TEMPORAL ==========
+    # ========== 4. ANÁLISE TEMPORAL COM DESCRIÇÃO ==========
     if 'Data de Solicitação' in df.columns:
-        st.markdown("### 📅 Evolução das Solicitações")
+        st.markdown("""
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
+            <p style="margin: 0; color: #2c3e50; font-size: 14px;">
+                <strong>📅 Evolução das Solicitações</strong> - Acompanhe a tendência de demanda ao longo do tempo e a variação mensal.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         df['Mês'] = df['Data de Solicitação'].dt.to_period('M').astype(str)
         evolucao = df.groupby('Mês').size().reset_index()
@@ -625,15 +669,24 @@ with tab2:
                         <p style="margin-top: 20px; color: #666;">
                             {ultimo_mes} solicitações no último mês
                         </p>
+                        <p style="margin-top: 10px; color: #666; font-size: 12px;">
+                            {f'📈 Demanda em crescimento' if variacao > 0 else '📉 Demanda em queda'}
+                        </p>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
     
     st.divider()
     
-    # ========== 5. ANÁLISE DE PRODUÇÃO ==========
+    # ========== 5. ANÁLISE DE PRODUÇÃO COM DESCRIÇÃO ==========
     if 'Produção' in df.columns:
-        st.markdown("### 🏭 Distribuição Interna")
+        st.markdown("""
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
+            <p style="margin: 0; color: #2c3e50; font-size: 14px;">
+                <strong>🏭 Distribuição Interna</strong> - Compare o volume de demandas entre as equipes Ideatore e Cocred.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         col_prod1, col_prod2 = st.columns(2)
         
@@ -676,6 +729,9 @@ with tab2:
                             Ideatore: {ideatore/total_prod*100:.0f}% | 
                             Cocred: {cocred/total_prod*100:.0f}%
                         </p>
+                        <p style="margin: 5px 0 0 0; color: #666; font-size: 12px;">
+                            {f'🏆 Ideatore lidera em volume' if ideatore > cocred else '🏆 Cocred lidera em volume'}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -715,11 +771,22 @@ with tab3:
         st.info("👆 Digite um termo acima para pesquisar nos dados")
 
 # =========================================================
-# TAB 4: KPIs COCRED
+# TAB 4: KPIs COCRED (COM DESCRIÇÕES!)
 # =========================================================
 
 with tab4:
     st.subheader("🎯 KPIs - Campanhas COCRED")
+    
+    # ========== DESCRIÇÃO INICIAL ==========
+    st.markdown("""
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
+        <p style="margin: 0; color: #2c3e50; font-size: 14px;">
+            <strong>🎯 Indicadores Estratégicos</strong> - Acompanhe os principais volumes de produção: 
+            <strong>Criações</strong> (novas peças), <strong>Derivações</strong> (adaptações), 
+            <strong>Extra Contrato</strong> (demandas fora do escopo) e <strong>Campanhas Ativas</strong>.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # ========== FILTROS ==========
     col_filtro_kpi1, col_filtro_kpi2, col_filtro_kpi3 = st.columns(3)
@@ -758,7 +825,7 @@ with tab4:
     total_kpi = len(df_kpi)
     st.divider()
     
-    # ========== CARDS DE KPIs ==========
+    # ========== CARDS DE KPIs COM DESCRIÇÕES ==========
     st.markdown("### 🎯 Indicadores Estratégicos")
     
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
@@ -778,6 +845,9 @@ with tab4:
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">🎨 CRIAÇÕES</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{criacoes_kpi}</p>
             <p style="font-size: 12px; margin: 0;">{percent_criacoes:.0f}% do total</p>
+            <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
+                📌 Peças novas desenvolvidas do zero
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -796,6 +866,9 @@ with tab4:
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">🔄 DERIVAÇÕES</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{derivacoes_kpi}</p>
             <p style="font-size: 12px; margin: 0;">{percent_derivacoes:.0f}% do total</p>
+            <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
+                📌 Adaptações de peças existentes
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -814,6 +887,9 @@ with tab4:
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">📦 EXTRA CONTRATO</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{extra_kpi}</p>
             <p style="font-size: 12px; margin: 0;">{percent_extra:.0f}% do total</p>
+            <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
+                📌 Demandas fora do escopo contratual
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -830,16 +906,25 @@ with tab4:
             <p style="font-size: 14px; margin: 0; opacity: 0.9;">🚀 CAMPANHAS</p>
             <p style="font-size: 36px; font-weight: bold; margin: 0;">{campanhas_kpi}</p>
             <p style="font-size: 12px; margin: 0;">ativas no período</p>
+            <p style="font-size: 11px; margin: 5px 0 0 0; opacity: 0.8;">
+                📌 Número de campanhas com demandas
+            </p>
         </div>
         """, unsafe_allow_html=True)
     
     st.divider()
     
-    # ========== GRÁFICOS ==========
+    # ========== GRÁFICOS COM DESCRIÇÕES ==========
     col_chart1, col_chart2 = st.columns([3, 2])
     
     with col_chart1:
-        st.markdown("### 🏆 Top Campanhas por Volume")
+        st.markdown("""
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 10px; margin-bottom: 10px;">
+            <p style="margin: 0; color: #2c3e50; font-size: 13px;">
+                <strong>🏆 Top Campanhas</strong> - Rankings das campanhas com maior volume de demandas no período.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         if 'Campanha' in df_kpi.columns:
             campanhas_top = df_kpi['Campanha'].value_counts().head(8).reset_index()
@@ -869,7 +954,13 @@ with tab4:
         st.plotly_chart(fig_campanhas, use_container_width=True)
     
     with col_chart2:
-        st.markdown("### 🎯 Distribuição por Status")
+        st.markdown("""
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 10px; margin-bottom: 10px;">
+            <p style="margin: 0; color: #2c3e50; font-size: 13px;">
+                <strong>🎯 Distribuição por Status</strong> - Como as demandas estão distribuídas nos diferentes estágios.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         if 'Status' in df_kpi.columns:
             status_dist = df_kpi['Status'].value_counts().reset_index()
@@ -896,8 +987,15 @@ with tab4:
     
     st.divider()
     
-    # ========== TABELA DE DEMANDAS ==========
-    st.markdown("### 📋 Demandas por Tipo de Atividade")
+    # ========== TABELA DE DEMANDAS COM DESCRIÇÃO ==========
+    st.markdown("""
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #667eea;">
+        <p style="margin: 0; color: #2c3e50; font-size: 14px;">
+            <strong>📋 Demandas por Tipo de Atividade</strong> - Detalhamento do volume por tipo de atividade, 
+            com classificação de volume (alto, médio, baixo) para priorização.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     if 'Tipo Atividade' in df_kpi.columns:
         tipo_counts = df_kpi['Tipo Atividade'].value_counts().head(8).reset_index()
@@ -914,7 +1012,13 @@ with tab4:
         
         tipo_counts['Status'] = tipo_counts['Quantidade'].apply(get_status)
         
-        st.dataframe(tipo_counts, use_container_width=True, height=350, hide_index=True)
+        st.dataframe(tipo_counts, use_container_width=True, height=350, hide_index=True,
+                    column_config={
+                        "Tipo de Atividade": "📌 Tipo de Atividade",
+                        "Quantidade": "🔢 Quantidade",
+                        "% do Total": "📊 % do Total",
+                        "Status": "🚦 Classificação"
+                    })
     else:
         demandas_exemplo = pd.DataFrame({
             'Tipo de Atividade': ['Evento', 'Comunicado', 'Campanha Orgânica', 
