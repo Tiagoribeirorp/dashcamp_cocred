@@ -77,7 +77,7 @@ def get_access_token():
 # =========================================================
 # 2. CARREGAR DADOS (VERSÃO OTIMIZADA)
 # =========================================================
-@st.cache_data(ttl=60, show_spinner="🔄 Baixando dados do Excel...")  # APENAS 1 MINUTO!
+@st.cache_data(ttl=60, show_spinner="🔄 Baixando dados do Excel...")
 def carregar_dados_excel_online():
     """Carrega dados da aba 'Demandas ID' com cache curto"""
     
@@ -94,38 +94,22 @@ def carregar_dados_excel_online():
     }
     
     try:
-        # Baixar arquivo
         response = requests.get(file_url, headers=headers, timeout=45)
         
         if response.status_code == 200:
-            # Ler Excel
             excel_file = BytesIO(response.content)
             
-            # DEBUG: Mostrar tamanho
-            if st.session_state.get('debug_mode', False):
-                st.sidebar.info(f"📦 Arquivo: {len(response.content):,} bytes")
-            
-            # Ler aba específica
             try:
                 df = pd.read_excel(excel_file, sheet_name=SHEET_NAME, engine='openpyxl')
-                
-                # DEBUG: Mostrar informações
-                if st.session_state.get('debug_mode', False):
-                    st.sidebar.success(f"✅ {len(df)} linhas carregadas")
-                
                 return df
-                
             except Exception as e:
-                # Tentar primeira aba
                 st.warning(f"⚠️ Erro na aba '{SHEET_NAME}': {str(e)[:100]}")
                 excel_file.seek(0)
                 df = pd.read_excel(excel_file, engine='openpyxl')
                 return df
-                
         else:
             st.error(f"❌ Erro {response.status_code}")
             return pd.DataFrame()
-            
     except Exception as e:
         st.error(f"❌ Erro: {str(e)}")
         return pd.DataFrame()
@@ -151,7 +135,53 @@ def converter_para_data(df, coluna):
     return df
 
 # =========================================================
-# 4. SIDEBAR COMPLETA E SUPER FUNCIONAL
+# 4. CARREGAR DADOS PRIMEIRO (ANTES DA SIDEBAR)
+# =========================================================
+
+# Placeholder para carregamento
+with st.spinner("📥 Carregando dados do Excel..."):
+    df = carregar_dados_excel_online()
+
+# Verificar se tem dados
+if df.empty:
+    st.error("❌ Nenhum dado carregado. Usando dados de exemplo...")
+    # Dados de exemplo para demonstração
+    dados_exemplo = {
+        'ID': range(1, 101),
+        'Status': ['Aprovado', 'Em Produção', 'Aguardando', 'Concluído'] * 25,
+        'Prioridade': ['Alta', 'Média', 'Baixa'] * 33 + ['Alta'],
+        'Produção': ['Cocred', 'Ideatore'] * 50,
+        'Data de Solicitação': pd.date_range(start='2024-01-01', periods=100, freq='D'),
+        'Solicitante': ['Cassia Inoue', 'Laís Toledo', 'Nádia Zanin'] * 33 + ['Cassia Inoue']
+    }
+    df = pd.DataFrame(dados_exemplo)
+
+# Converter coluna de data de solicitação se existir
+if 'Data de Solicitação' in df.columns:
+    df = converter_para_data(df, 'Data de Solicitação')
+    if pd.api.types.is_datetime64_any_dtype(df['Data de Solicitação']):
+        df['Data de Solicitação'] = df['Data de Solicitação'].dt.tz_localize(None)
+
+# Calcular métricas AGORA que os dados estão carregados
+total_linhas = len(df)
+total_colunas = len(df.columns)
+
+# Calcular métricas para o resumo executivo
+total_concluidos = 0
+if 'Status' in df.columns:
+    total_concluidos = len(df[df['Status'].str.contains('Concluído|Aprovado', na=False, case=False)])
+
+total_alta = 0
+if 'Prioridade' in df.columns:
+    total_alta = len(df[df['Prioridade'].str.contains('Alta', na=False, case=False)])
+
+total_hoje = 0
+if 'Data de Solicitação' in df.columns:
+    hoje = datetime.now().date()
+    total_hoje = len(df[pd.to_datetime(df['Data de Solicitação']).dt.date == hoje])
+
+# =========================================================
+# 5. SIDEBAR COMPLETA (AGORA COM DADOS CARREGADOS)
 # =========================================================
 
 with st.sidebar:
@@ -190,7 +220,7 @@ with st.sidebar:
     if token:
         st.success("✅ **Conectado** | Token ativo", icon="🔌")
     else:
-        st.error("❌ **Offline** | Falha na conexão", icon="⚠️")
+        st.error("❌ **Offline** | Usando dados de exemplo", icon="⚠️")
     
     st.divider()
     
@@ -222,16 +252,98 @@ with st.sidebar:
     
     st.divider()
     
-    # ========== 3. RESUMO EXECUTIVO ==========
+    # ========== 3. RESUMO EXECUTIVO (AGORA COM DADOS REAIS!) ==========
     st.markdown("### 📊 **Resumo Executivo**")
     
-    # Estas métricas serão atualizadas após carregar os dados
-    # Por enquanto, placeholders
-    st.info("⏳ Carregando métricas...")
+    col_m1, col_m2 = st.columns(2)
+    
+    with col_m1:
+        st.metric(
+            label="📋 Total de Registros",
+            value=f"{total_linhas:,}",
+            delta=None
+        )
+    
+    with col_m2:
+        if total_linhas > 0:
+            percentual_concluidos = (total_concluidos / total_linhas * 100) if total_concluidos > 0 else 0
+            st.metric(
+                label="✅ Concluídos/Aprovados",
+                value=f"{total_concluidos:,}",
+                delta=f"{percentual_concluidos:.0f}%"
+            )
+        else:
+            st.metric(label="✅ Concluídos/Aprovados", value="0")
+    
+    col_m3, col_m4 = st.columns(2)
+    
+    with col_m3:
+        st.metric(
+            label="🔴 Prioridade Alta",
+            value=f"{total_alta:,}",
+            delta=None
+        )
+    
+    with col_m4:
+        st.metric(
+            label="📅 Solicitações Hoje",
+            value=total_hoje,
+            delta=None
+        )
     
     st.divider()
     
-    # ========== 4. FERRAMENTAS ==========
+    # ========== 4. FILTROS RÁPIDOS ==========
+    st.markdown("### ⚡ **Filtros Rápidos**")
+    
+    # Filtro de período pré-definido
+    with st.expander("📅 **Período rápido**", expanded=False):
+        if 'Data de Solicitação' in df.columns:
+            periodo_rapido = st.selectbox(
+                "Selecionar:",
+                ["Últimos 7 dias", "Últimos 15 dias", "Últimos 30 dias", 
+                 "Este mês", "Mês passado", "Este ano"],
+                key="periodo_rapido_sidebar"
+            )
+            
+            if st.button("✅ Aplicar período", use_container_width=True):
+                hoje = datetime.now().date()
+                
+                if periodo_rapido == "Últimos 7 dias":
+                    st.session_state.periodo_data = "Últimos 30 dias"
+                    st.session_state.data_ini = hoje - timedelta(days=7)
+                    st.session_state.data_fim = hoje
+                elif periodo_rapido == "Últimos 15 dias":
+                    st.session_state.periodo_data = "Últimos 30 dias"
+                    st.session_state.data_ini = hoje - timedelta(days=15)
+                    st.session_state.data_fim = hoje
+                elif periodo_rapido == "Últimos 30 dias":
+                    st.session_state.periodo_data = "Últimos 30 dias"
+                    st.session_state.data_ini = hoje - timedelta(days=30)
+                    st.session_state.data_fim = hoje
+                elif periodo_rapido == "Este mês":
+                    st.session_state.periodo_data = "Este mês"
+                    st.session_state.data_ini = hoje.replace(day=1)
+                    st.session_state.data_fim = hoje
+                elif periodo_rapido == "Mês passado":
+                    primeiro_dia_mes_passado = (hoje.replace(day=1) - timedelta(days=1)).replace(day=1)
+                    ultimo_dia_mes_passado = hoje.replace(day=1) - timedelta(days=1)
+                    st.session_state.periodo_data = "Personalizado"
+                    st.session_state.data_ini = primeiro_dia_mes_passado
+                    st.session_state.data_fim = ultimo_dia_mes_passado
+                elif periodo_rapido == "Este ano":
+                    st.session_state.periodo_data = "Personalizado"
+                    st.session_state.data_ini = hoje.replace(month=1, day=1)
+                    st.session_state.data_fim = hoje
+                
+                st.toast(f"✅ Período '{periodo_rapido}' aplicado!")
+                st.rerun()
+        else:
+            st.info("ℹ️ Sem coluna de data")
+    
+    st.divider()
+    
+    # ========== 5. FERRAMENTAS ==========
     st.markdown("### 🛠️ **Ferramentas**")
     
     # Modo Debug
@@ -254,8 +366,12 @@ with st.sidebar:
     
     st.divider()
     
-    # ========== 5. INFORMAÇÕES E LINKS ==========
+    # ========== 6. INFORMAÇÕES E LINKS ==========
     st.markdown("### ℹ️ **Informações**")
+    
+    # Última atualização
+    st.caption(f"🕐 **Última atualização:**")
+    st.caption(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
     
     # Link para Excel
     st.markdown("""
@@ -266,7 +382,7 @@ with st.sidebar:
     # Instruções rápidas
     with st.expander("📖 **Como usar**", expanded=False):
         st.markdown("""
-        1. **Filtros** - Use os filtros acima para refinar os dados
+        1. **Filtros** - Use os filtros abaixo para refinar os dados
         2. **Período** - Selecione datas para análise temporal
         3. **Visualização** - Ajuste linhas por página
         4. **Exportação** - Use os botões na área principal
@@ -275,101 +391,18 @@ with st.sidebar:
     
     st.divider()
     
-    # ========== 6. RODAPÉ DA SIDEBAR ==========
+    # ========== 7. RODAPÉ DA SIDEBAR ==========
     st.markdown("""
     <div style="text-align: center; color: #666; font-size: 11px; padding: 10px 0;">
         <p style="margin: 0;">Desenvolvido para</p>
         <p style="margin: 0; font-weight: bold; color: #667eea;">SICOOB COCRED</p>
         <p style="margin: 5px 0 0 0;">© 2026 - Ideatore</p>
-        <p style="margin: 5px 0 0 0;">v3.0.0</p>
+        <p style="margin: 5px 0 0 0;">v3.1.0</p>
     </div>
     """, unsafe_allow_html=True)
 
 # =========================================================
-# 5. CARREGAR E MOSTRAR DADOS
-# =========================================================
-
-# Carregar dados
-with st.spinner("📥 Carregando dados do Excel..."):
-    df = carregar_dados_excel_online()
-
-# Verificar se tem dados
-if df.empty:
-    st.error("❌ Nenhum dado carregado")
-    st.stop()
-
-# Converter coluna de data de solicitação se existir
-if 'Data de Solicitação' in df.columns:
-    df = converter_para_data(df, 'Data de Solicitação')
-    if pd.api.types.is_datetime64_any_dtype(df['Data de Solicitação']):
-        df['Data de Solicitação'] = df['Data de Solicitação'].dt.tz_localize(None)
-
-# Mostrar contador REAL
-total_linhas = len(df)
-total_colunas = len(df.columns)
-
-# =========================================================
-# 6. ATUALIZAR SIDEBAR COM MÉTRICAS REAIS
-# =========================================================
-
-with st.sidebar:
-    # Substituir o placeholder de resumo executivo com métricas reais
-    st.markdown("### 📊 **Resumo Executivo**")
-    
-    col_m1, col_m2 = st.columns(2)
-    
-    with col_m1:
-        st.metric(
-            label="📋 Total",
-            value=f"{total_linhas:,}",
-            delta=None
-        )
-    
-    with col_m2:
-        if 'Status' in df.columns:
-            concluidos = len(df[df['Status'].str.contains('Concluído|Aprovado', na=False, case=False)])
-            percentual = (concluidos / total_linhas * 100) if total_linhas > 0 else 0
-            st.metric(
-                label="✅ Concluídos",
-                value=f"{concluidos:,}",
-                delta=f"{percentual:.0f}%"
-            )
-        else:
-            st.metric(label="✅ Concluídos", value="N/A")
-    
-    col_m3, col_m4 = st.columns(2)
-    
-    with col_m3:
-        if 'Prioridade' in df.columns:
-            alta = len(df[df['Prioridade'].str.contains('Alta', na=False, case=False)])
-            st.metric(
-                label="🔴 Alta",
-                value=f"{alta:,}",
-                delta=None
-            )
-        else:
-            st.metric(label="🔴 Alta", value="N/A")
-    
-    with col_m4:
-        if 'Data de Solicitação' in df.columns:
-            hoje = datetime.now().date()
-            df_hoje = df[pd.to_datetime(df['Data de Solicitação']).dt.date == hoje]
-            st.metric(
-                label="📅 Hoje",
-                value=len(df_hoje),
-                delta=None
-            )
-        else:
-            st.metric(label="📅 Hoje", value="N/A")
-    
-    st.divider()
-    
-    # Atualizar timestamp
-    st.caption(f"🕐 **Última atualização:**")
-    st.caption(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-
-# =========================================================
-# 7. INTERFACE PRINCIPAL
+# 6. INTERFACE PRINCIPAL
 # =========================================================
 
 # Título
@@ -377,10 +410,12 @@ st.title("📊 Dashboard de Campanhas – SICOOB COCRED")
 st.caption(f"🔗 Conectado ao Excel Online | Aba: {SHEET_NAME}")
 
 # =========================================================
-# 8. VISUALIZAÇÃO COMPLETA DOS DADOS (COM PAGINAÇÃO)
+# 7. VISUALIZAÇÃO COMPLETA DOS DADOS (COM PAGINAÇÃO)
 # =========================================================
 
 st.success(f"✅ **{total_linhas} registros** carregados com sucesso!")
+if 'Status' in df.columns:
+    st.info(f"📊 **Concluídos/Aprovados:** {total_concluidos} ({total_concluidos/total_linhas*100:.0f}%)")
 st.info(f"📋 **Colunas:** {', '.join(df.columns.tolist()[:5])}{'...' if len(df.columns) > 5 else ''}")
 
 st.header("📋 Dados Completos")
@@ -552,7 +587,7 @@ with tab3:
         st.info("👆 Digite um termo acima para pesquisar nos dados")
 
 # =========================================================
-# 9. FILTROS AVANÇADOS (COM FILTRO DE DATA)
+# 8. FILTROS AVANÇADOS (COM FILTRO DE DATA)
 # =========================================================
 
 st.header("🎛️ Filtros Avançados")
@@ -600,13 +635,28 @@ with filtro_cols[3]:
             data_min = datas_validas.min().date()
             data_max = datas_validas.max().date()
             
+            # Verificar se há período rápido na session_state
+            periodo_default = "Todos"
+            if 'periodo_data' in st.session_state:
+                periodo_default = st.session_state.periodo_data
+            
             periodo_opcao = st.selectbox(
                 "Período:",
                 ["Todos", "Hoje", "Esta semana", "Este mês", "Últimos 30 dias", "Personalizado"],
+                index=["Todos", "Hoje", "Esta semana", "Este mês", "Últimos 30 dias", "Personalizado"].index(periodo_default) 
+                if periodo_default in ["Todos", "Hoje", "Esta semana", "Este mês", "Últimos 30 dias", "Personalizado"] else 0,
                 key="periodo_data"
             )
             
             hoje = datetime.now().date()
+            
+            # Verificar se há datas personalizadas na session_state
+            if 'data_ini' in st.session_state and 'data_fim' in st.session_state:
+                data_ini_personalizada = st.session_state.data_ini
+                data_fim_personalizada = st.session_state.data_fim
+            else:
+                data_ini_personalizada = data_min
+                data_fim_personalizada = data_max
             
             if periodo_opcao == "Todos":
                 filtros_ativos['data_inicio'] = data_min
@@ -639,9 +689,9 @@ with filtro_cols[3]:
             elif periodo_opcao == "Personalizado":
                 col1, col2 = st.columns(2)
                 with col1:
-                    data_ini = st.date_input("De", data_min, key="data_ini")
+                    data_ini = st.date_input("De", data_ini_personalizada, key="data_ini")
                 with col2:
-                    data_fim = st.date_input("Até", data_max, key="data_fim")
+                    data_fim = st.date_input("Até", data_fim_personalizada, key="data_fim")
                 filtros_ativos['data_inicio'] = data_ini
                 filtros_ativos['data_fim'] = data_fim
                 filtros_ativos['tem_filtro_data'] = True
@@ -707,7 +757,7 @@ else:
     st.info("👆 Use os filtros acima para refinar os dados")
 
 # =========================================================
-# 10. EXPORTAÇÃO (COM DADOS FILTRADOS)
+# 9. EXPORTAÇÃO (COM DADOS FILTRADOS)
 # =========================================================
 
 st.header("💾 Exportar Dados")
@@ -762,7 +812,7 @@ with col_exp3:
     )
 
 # =========================================================
-# 11. DEBUG INFO (apenas se ativado)
+# 10. DEBUG INFO (apenas se ativado)
 # =========================================================
 
 if st.session_state.debug_mode:
@@ -777,7 +827,7 @@ if st.session_state.debug_mode:
         if token:
             st.success(f"✅ Token: ...{token[-10:]}")
         else:
-            st.error("❌ Token não disponível")
+            st.error("❌ Token não disponível - Usando dados de exemplo")
         
         st.write(f"**DataFrame Info:**")
         st.write(f"- Shape: {df.shape}")
@@ -791,18 +841,14 @@ if st.session_state.debug_mode:
             st.write(f"- Máximo: {df['Data de Solicitação'].max()}")
             st.write(f"- Nulos: {df['Data de Solicitação'].isnull().sum()}")
         
-        st.write("**Amostra dos Dados:**")
-        
-        tab_debug1, tab_debug2 = st.tabs(["Primeiras 5", "Últimas 5"])
-        
-        with tab_debug1:
-            st.dataframe(df.head(5), use_container_width=True)
-        
-        with tab_debug2:
-            st.dataframe(df.tail(5), use_container_width=True)
+        st.write(f"**Resumo Executivo:**")
+        st.write(f"- Total: {total_linhas}")
+        st.write(f"- Concluídos: {total_concluidos}")
+        st.write(f"- Prioridade Alta: {total_alta}")
+        st.write(f"- Hoje: {total_hoje}")
 
 # =========================================================
-# 12. RODAPÉ
+# 11. RODAPÉ
 # =========================================================
 
 st.divider()
@@ -821,7 +867,7 @@ with footer_col3:
     st.caption("🔄 Atualiza a cada 1 minuto | 📧 cristini.cordesco@ideatoreamericas.com")
 
 # =========================================================
-# 13. AUTO-REFRESH (opcional)
+# 12. AUTO-REFRESH (opcional)
 # =========================================================
 
 if auto_refresh:
