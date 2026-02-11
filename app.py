@@ -181,7 +181,49 @@ def carregar_dados_excel_online():
         return pd.DataFrame()
 
 # =========================================================
-# 3. INTERFACE STREAMLIT
+# 3. VERIFICADOR DE ATUALIZAÇÃO
+# =========================================================
+def verificar_atualizacao_dados(df_original):
+    """Verifica se os dados foram atualizados corretamente"""
+    
+    # Contar linhas e colunas
+    total_linhas = len(df_original)
+    total_colunas = len(df_original.columns)
+    
+    # Verificar se há dados duplicados
+    duplicados = df_original.duplicated().sum()
+    
+    # Verificar valores nulos
+    nulos_total = df_original.isnull().sum().sum()
+    
+    # Mostrar informações
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**📈 Estatísticas dos Dados:**")
+    
+    col_stats1, col_stats2 = st.sidebar.columns(2)
+    
+    with col_stats1:
+        st.metric("Linhas", total_linhas)
+        st.metric("Colunas", total_colunas)
+    
+    with col_stats2:
+        st.metric("Duplicados", duplicados)
+        st.metric("Valores Nulos", nulos_total)
+    
+    # Mostrar detalhes
+    with st.sidebar.expander("🔍 Detalhes dos dados"):
+        st.write(f"**Formato:** {total_linhas} × {total_colunas}")
+        st.write(f"**Memória usada:** {df_original.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
+        
+        # Verificar abas disponíveis (se possível)
+        st.write("**Colunas:**")
+        for col in df_original.columns:
+            st.write(f"- {col} ({df_original[col].dtype})")
+    
+    return total_linhas
+
+# =========================================================
+# 4. INTERFACE STREAMLIT
 # =========================================================
 
 # Título principal
@@ -223,7 +265,7 @@ st.sidebar.markdown(f"""
 """)
 
 # =========================================================
-# 4. CARREGAR DADOS
+# 5. CARREGAR DADOS
 # =========================================================
 
 # Carregar dados do Excel Online
@@ -277,22 +319,55 @@ if df.empty:
         st.stop()
 
 # =========================================================
-# 5. PROCESSAMENTO DOS DADOS
+# 6. VERIFICAÇÃO E VISUALIZAÇÃO DOS DADOS
 # =========================================================
 
-# Exemplo de tratamento - AJUSTE CONFORME SUA PLANILHA
 st.header("📈 Análise dos Dados")
 
-# Mostrar dataframe
-st.subheader("Dados Brutos")
-st.dataframe(df, width='stretch', height=400)
+# Verificar atualização
+total_linhas = verificar_atualizacao_dados(df)
+
+# Mostrar contador REAL
+st.subheader(f"Dados Carregados: {total_linhas} registros")
+
+# Configurar pandas para mostrar todos os dados
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+
+# Mostrar dataframe completo com scroll
+st.dataframe(df, width='stretch', height=600, use_container_width=True)
+
+# Adicionar controles para navegação
+st.caption(f"Mostrando todos os {total_linhas} registros")
+
+# Botão para mostrar/ocultar dados
+if st.checkbox("📋 Mostrar resumo estatístico em vez dos dados brutos"):
+    st.subheader("Resumo Estatístico")
+    
+    # Estatísticas descritivas
+    st.write("**Estatísticas Numéricas:**")
+    st.dataframe(df.describe(), width='stretch')
+    
+    # Informações dos tipos
+    st.write("**Tipos de Dados:**")
+    tipo_df = pd.DataFrame({
+        'Coluna': df.columns,
+        'Tipo': df.dtypes.values,
+        'Valores Únicos': [df[col].nunique() for col in df.columns],
+        'Valores Nulos': [df[col].isnull().sum() for col in df.columns]
+    })
+    st.dataframe(tipo_df, width='stretch')
+
+# =========================================================
+# 7. PROCESSAMENTO DOS DADOS
+# =========================================================
 
 # Estatísticas básicas
 st.subheader("📊 Estatísticas")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric("Total de Registros", len(df))
+    st.metric("Total de Registros", total_linhas)
 
 with col2:
     st.metric("Total de Colunas", len(df.columns))
@@ -306,6 +381,8 @@ with col3:
             st.metric("Data Mais Recente", latest_date.strftime('%d/%m/%Y'))
         except:
             st.metric("Amostra", "5 registros")
+    else:
+        st.metric("Valores Únicos", df.iloc[:, 0].nunique())
 
 # Processamento específico para "Prazo em dias" (se existir)
 if "Prazo em dias" in df.columns:
@@ -342,9 +419,13 @@ for i, col_name in enumerate(df.columns):
             # Mostrar amostra
             if df[col_name].dtype == 'object':
                 st.write("Amostra:", df[col_name].head(5).tolist())
+            elif df[col_name].dtype in ['int64', 'float64']:
+                st.write("Mínimo:", df[col_name].min())
+                st.write("Máximo:", df[col_name].max())
+                st.write("Média:", df[col_name].mean())
 
 # =========================================================
-# 6. FILTROS INTERATIVOS
+# 8. FILTROS INTERATIVOS
 # =========================================================
 st.header("🎛️ Filtros")
 
@@ -394,11 +475,16 @@ if date_cols:
             pass
 
 # Mostrar dados filtrados
-st.subheader("Dados Filtrados")
-st.dataframe(df, width='stretch', height=300)
+if len(df) < total_linhas:
+    st.subheader(f"Dados Filtrados ({len(df)} de {total_linhas} registros)")
+    st.dataframe(df, width='stretch', height=300)
+else:
+    st.subheader("Dados Completos (sem filtros aplicados)")
+    st.dataframe(df.head(20), width='stretch', height=300)
+    st.caption(f"Mostrando 20 de {total_linhas} registros. Use os filtros acima para refinar.")
 
 # =========================================================
-# 7. EXPORTAÇÃO DE DADOS
+# 9. EXPORTAÇÃO DE DADOS
 # =========================================================
 st.header("💾 Exportar Dados")
 
@@ -410,7 +496,7 @@ with col_export1:
     st.download_button(
         label="📥 Download CSV",
         data=csv,
-        file_name=f"dados_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+        file_name=f"dados_cocred_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
         mime="text/csv",
         width='stretch'
     )
@@ -425,13 +511,13 @@ with col_export2:
     st.download_button(
         label="📥 Download Excel",
         data=excel_data,
-        file_name=f"dados_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+        file_name=f"dados_cocred_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         width='stretch'
     )
 
 # =========================================================
-# 8. RODAPÉ COM INFORMAÇÕES
+# 10. RODAPÉ COM INFORMAÇÕES
 # =========================================================
 st.divider()
 
@@ -444,10 +530,10 @@ with col_footer2:
     st.caption("🔄 Atualização automática a cada 5min")
 
 with col_footer3:
-    st.caption(f"📊 {len(df)} registros | Aba: {SHEET_NAME}")
+    st.caption(f"📊 {total_linhas} registros | Aba: {SHEET_NAME}")
 
 # =========================================================
-# 9. CONFIGURAÇÃO DAS SECRETS (instruções)
+# 11. CONFIGURAÇÃO DAS SECRETS (instruções)
 # =========================================================
 with st.sidebar.expander("⚙️ Configurar Secrets", expanded=False):
     st.markdown("""
@@ -482,7 +568,7 @@ with st.sidebar.expander("⚙️ Configurar Secrets", expanded=False):
     """)
 
 # =========================================================
-# 10. MODO DEBUG (apenas para desenvolvimento)
+# 12. MODO DEBUG (apenas para desenvolvimento)
 # =========================================================
 if st.sidebar.checkbox("🐛 Modo Debug", value=False):
     with st.sidebar.expander("Informações de Debug"):
@@ -507,3 +593,11 @@ if st.sidebar.checkbox("🐛 Modo Debug", value=False):
                 st.success(f"Token ativo: ...{token[-10:]}")
             else:
                 st.error("Token não disponível")
+            
+            # Mostrar primeiras linhas
+            st.write("**Primeiras 5 linhas:**")
+            st.dataframe(df.head())
+            
+            # Mostrar últimas linhas
+            st.write("**Últimas 5 linhas:**")
+            st.dataframe(df.tail())
