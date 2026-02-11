@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 import msal
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import time
 
@@ -17,7 +17,7 @@ pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', None)
 
 st.set_page_config(
-    page_title="Dashboard de Campanhas - SICOOB COCRED1", 
+    page_title="Dashboard de Campanhas - SICOOB COCRED", 
     layout="wide",
     page_icon="📊"
 )
@@ -147,6 +147,14 @@ def calcular_altura_tabela(num_linhas, num_colunas):
     
     return min(altura_conteudo, altura_maxima)
 
+def converter_para_data(df, coluna):
+    """Converte coluna para datetime se possível"""
+    try:
+        df[coluna] = pd.to_datetime(df[coluna], errors='coerce', dayfirst=True)
+    except:
+        pass
+    return df
+
 # =========================================================
 # 4. INTERFACE PRINCIPAL
 # =========================================================
@@ -213,6 +221,13 @@ with st.spinner("📥 Carregando dados do Excel..."):
 if df.empty:
     st.error("❌ Nenhum dado carregado")
     st.stop()
+
+# Converter coluna de data de solicitação se existir
+if 'Data de Solicitação' in df.columns:
+    df = converter_para_data(df, 'Data de Solicitação')
+    # Remover timezone se houver
+    if pd.api.types.is_datetime64_any_dtype(df['Data de Solicitação']):
+        df['Data de Solicitação'] = df['Data de Solicitação'].dt.tz_localize(None)
 
 # Mostrar contador REAL
 total_linhas = len(df)
@@ -330,7 +345,12 @@ with tab2:
     
     with col_stat1:
         st.write("**Resumo Numérico:**")
-        st.dataframe(df.describe(), use_container_width=True, height=300)
+        # Filtrar apenas colunas numéricas
+        colunas_numericas = df.select_dtypes(include=['number']).columns
+        if len(colunas_numericas) > 0:
+            st.dataframe(df[colunas_numericas].describe(), use_container_width=True, height=300)
+        else:
+            st.info("ℹ️ Não há colunas numéricas para análise estatística.")
     
     with col_stat2:
         st.write("**Informações das Colunas:**")
@@ -413,13 +433,13 @@ with tab3:
         st.info("👆 Digite um termo acima para pesquisar nos dados")
 
 # =========================================================
-# 7. FILTROS INTERATIVOS
+# 7. FILTROS AVANÇADOS (COM FILTRO DE DATA)
 # =========================================================
 
 st.header("🎛️ Filtros Avançados")
 
-# Criar filtros dinâmicos
-filtro_cols = st.columns(3)
+# Criar layout de 4 colunas para acomodar o filtro de data
+filtro_cols = st.columns(4)
 
 filtros_ativos = {}
 
@@ -427,7 +447,7 @@ filtros_ativos = {}
 if 'Status' in df.columns:
     with filtro_cols[0]:
         status_opcoes = ['Todos'] + sorted(df['Status'].dropna().unique().tolist())
-        status_selecionado = st.selectbox("Status:", status_opcoes, key="filtro_status")
+        status_selecionado = st.selectbox("📌 Status:", status_opcoes, key="filtro_status")
         if status_selecionado != 'Todos':
             filtros_ativos['Status'] = status_selecionado
 
@@ -435,7 +455,7 @@ if 'Status' in df.columns:
 if 'Prioridade' in df.columns:
     with filtro_cols[1]:
         prioridade_opcoes = ['Todos'] + sorted(df['Prioridade'].dropna().unique().tolist())
-        prioridade_selecionada = st.selectbox("Prioridade:", prioridade_opcoes, key="filtro_prioridade")
+        prioridade_selecionada = st.selectbox("⚡ Prioridade:", prioridade_opcoes, key="filtro_prioridade")
         if prioridade_selecionada != 'Todos':
             filtros_ativos['Prioridade'] = prioridade_selecionada
 
@@ -443,72 +463,170 @@ if 'Prioridade' in df.columns:
 if 'Produção' in df.columns:
     with filtro_cols[2]:
         producao_opcoes = ['Todos'] + sorted(df['Produção'].dropna().unique().tolist())
-        producao_selecionada = st.selectbox("Produção:", producao_opcoes, key="filtro_producao")
+        producao_selecionada = st.selectbox("🏭 Produção:", producao_opcoes, key="filtro_producao")
         if producao_selecionada != 'Todos':
             filtros_ativos['Produção'] = producao_selecionada
 
-# Aplicar filtros
-if filtros_ativos:
-    df_filtrado = df.copy()
-    for col, valor in filtros_ativos.items():
-        df_filtrado = df_filtrado[df_filtrado[col] == valor]
+# ========== FILTRO DE DATA DE SOLICITAÇÃO ==========
+with filtro_cols[3]:
+    st.markdown("**📅 Data Solicitação**")
     
-    # Mostrar dados filtrados
+    # Verificar se existe coluna de data
+    if 'Data de Solicitação' in df.columns:
+        # Garantir que é datetime
+        if not pd.api.types.is_datetime64_any_dtype(df['Data de Solicitação']):
+            df['Data de Solicitação'] = pd.to_datetime(df['Data de Solicitação'], errors='coerce')
+        
+        # Remover datas nulas
+        datas_validas = df['Data de Solicitação'].dropna()
+        
+        if not datas_validas.empty:
+            data_min = datas_validas.min().date()
+            data_max = datas_validas.max().date()
+            
+            # Opções de período rápido
+            periodo_opcao = st.selectbox(
+                "Período:",
+                ["Todos", "Hoje", "Esta semana", "Este mês", "Últimos 30 dias", "Personalizado"],
+                key="periodo_data"
+            )
+            
+            hoje = datetime.now().date()
+            
+            if periodo_opcao == "Todos":
+                filtros_ativos['data_inicio'] = data_min
+                filtros_ativos['data_fim'] = data_max
+                filtros_ativos['tem_filtro_data'] = True
+                
+            elif periodo_opcao == "Hoje":
+                filtros_ativos['data_inicio'] = hoje
+                filtros_ativos['data_fim'] = hoje
+                filtros_ativos['tem_filtro_data'] = True
+                
+            elif periodo_opcao == "Esta semana":
+                inicio_semana = hoje - timedelta(days=hoje.weekday())
+                filtros_ativos['data_inicio'] = inicio_semana
+                filtros_ativos['data_fim'] = hoje
+                filtros_ativos['tem_filtro_data'] = True
+                
+            elif periodo_opcao == "Este mês":
+                inicio_mes = hoje.replace(day=1)
+                filtros_ativos['data_inicio'] = inicio_mes
+                filtros_ativos['data_fim'] = hoje
+                filtros_ativos['tem_filtro_data'] = True
+                
+            elif periodo_opcao == "Últimos 30 dias":
+                inicio_30d = hoje - timedelta(days=30)
+                filtros_ativos['data_inicio'] = inicio_30d
+                filtros_ativos['data_fim'] = hoje
+                filtros_ativos['tem_filtro_data'] = True
+                
+            elif periodo_opcao == "Personalizado":
+                col1, col2 = st.columns(2)
+                with col1:
+                    data_ini = st.date_input("De", data_min, key="data_ini")
+                with col2:
+                    data_fim = st.date_input("Até", data_max, key="data_fim")
+                filtros_ativos['data_inicio'] = data_ini
+                filtros_ativos['data_fim'] = data_fim
+                filtros_ativos['tem_filtro_data'] = True
+    else:
+        st.info("ℹ️ Sem coluna de data")
+
+# =========================================================
+# APLICAR FILTROS
+# =========================================================
+
+df_filtrado = df.copy()
+
+# Aplicar filtros categóricos
+for col, valor in filtros_ativos.items():
+    if col not in ['data_inicio', 'data_fim', 'tem_filtro_data']:
+        df_filtrado = df_filtrado[df_filtrado[col] == valor]
+
+# Aplicar filtro de data
+if 'tem_filtro_data' in filtros_ativos and 'Data de Solicitação' in df.columns:
+    data_inicio = pd.Timestamp(filtros_ativos['data_inicio'])
+    data_fim = pd.Timestamp(filtros_ativos['data_fim']) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+    
+    df_filtrado = df_filtrado[
+        (df_filtrado['Data de Solicitação'] >= data_inicio) & 
+        (df_filtrado['Data de Solicitação'] <= data_fim)
+    ]
+
+# Mostrar resultados dos filtros
+if filtros_ativos:
     st.subheader(f"📊 Dados Filtrados ({len(df_filtrado)} de {total_linhas} registros)")
     
-    altura_filtrada = calcular_altura_tabela(len(df_filtrado), len(df_filtrado.columns))
-    
-    st.dataframe(
-        df_filtrado, 
-        use_container_width=True, 
-        height=min(altura_filtrada, 800)
-    )
-    
-    # Estatísticas dos filtros
-    col_filt1, col_filt2 = st.columns(2)
-    with col_filt1:
-        st.metric("📈 Registros Filtrados", len(df_filtrado))
-    with col_filt2:
-        porcentagem = (len(df_filtrado) / total_linhas * 100) if total_linhas > 0 else 0
-        st.metric("📊 % do Total", f"{porcentagem:.1f}%")
-    
-    # Botão para limpar filtros
-    if st.button("🧹 Limpar Todos os Filtros", type="secondary"):
-        for key in [k for k in st.session_state.keys() if k.startswith('filtro_')]:
-            del st.session_state[key]
-        st.rerun()
+    if len(df_filtrado) > 0:
+        altura_filtrada = calcular_altura_tabela(len(df_filtrado), len(df_filtrado.columns))
+        
+        st.dataframe(
+            df_filtrado, 
+            use_container_width=True, 
+            height=min(altura_filtrada, 800)
+        )
+        
+        # Estatísticas dos filtros
+        col_filt1, col_filt2, col_filt3 = st.columns(3)
+        
+        with col_filt1:
+            st.metric("📈 Registros Filtrados", len(df_filtrado))
+        
+        with col_filt2:
+            porcentagem = (len(df_filtrado) / total_linhas * 100) if total_linhas > 0 else 0
+            st.metric("📊 % do Total", f"{porcentagem:.1f}%")
+        
+        with col_filt3:
+            if 'tem_filtro_data' in filtros_ativos:
+                st.metric("📅 Período", 
+                         f"{filtros_ativos['data_inicio'].strftime('%d/%m')} a {filtros_ativos['data_fim'].strftime('%d/%m')}")
+        
+        # Botão para limpar filtros
+        if st.button("🧹 Limpar Todos os Filtros", type="secondary", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                if key.startswith('filtro_') or key in ['periodo_data', 'data_ini', 'data_fim']:
+                    del st.session_state[key]
+            st.rerun()
+    else:
+        st.warning("⚠️ Nenhum registro corresponde aos filtros aplicados.")
 else:
     st.info("👆 Use os filtros acima para refinar os dados")
 
 # =========================================================
-# 8. EXPORTAÇÃO
+# 8. EXPORTAÇÃO (COM DADOS FILTRADOS)
 # =========================================================
 
 st.header("💾 Exportar Dados")
+
+# Dados para exportação (usar filtrados se existirem)
+df_exportar = df_filtrado if filtros_ativos and len(df_filtrado) > 0 else df
 
 col_exp1, col_exp2, col_exp3 = st.columns(3)
 
 with col_exp1:
     # CSV
-    csv = df.to_csv(index=False, encoding='utf-8-sig')
+    csv = df_exportar.to_csv(index=False, encoding='utf-8-sig')
     st.download_button(
-        label="📥 Download CSV Completo",
+        label="📥 Download CSV",
         data=csv,
-        file_name=f"dados_cocred_completo_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+        file_name=f"dados_cocred_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
         mime="text/csv",
         use_container_width=True,
-        help="Baixar todos os dados em formato CSV"
+        help="Baixar dados em formato CSV"
     )
 
 with col_exp2:
     # Excel
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Dados_Completos')
+        df_exportar.to_excel(writer, index=False, sheet_name='Dados')
         # Adicionar aba de resumo
         resumo = pd.DataFrame({
-            'Métrica': ['Total Registros', 'Total Colunas', 'Data Exportação'],
-            'Valor': [total_linhas, total_colunas, datetime.now().strftime('%d/%m/%Y %H:%M')]
+            'Métrica': ['Total Registros', 'Total Colunas', 'Data Exportação', 'Filtros Aplicados'],
+            'Valor': [len(df_exportar), len(df_exportar.columns), 
+                     datetime.now().strftime('%d/%m/%Y %H:%M'),
+                     'Sim' if filtros_ativos else 'Não']
         })
         resumo.to_excel(writer, index=False, sheet_name='Resumo')
     
@@ -520,19 +638,19 @@ with col_exp2:
         file_name=f"dados_cocred_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
-        help="Baixar todos os dados em formato Excel com abas"
+        help="Baixar dados em formato Excel com abas"
     )
 
 with col_exp3:
     # JSON
-    json_data = df.to_json(orient='records', force_ascii=False)
+    json_data = df_exportar.to_json(orient='records', force_ascii=False, date_format='iso')
     st.download_button(
         label="📥 Download JSON",
         data=json_data,
         file_name=f"dados_cocred_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
         mime="application/json",
         use_container_width=True,
-        help="Baixar todos os dados em formato JSON"
+        help="Baixar dados em formato JSON"
     )
 
 # =========================================================
@@ -549,14 +667,21 @@ if st.session_state.debug_mode:
         
         token = get_access_token()
         if token:
-            st.success(f"Token: ...{token[-10:]}")
+            st.success(f"✅ Token: ...{token[-10:]}")
         else:
-            st.error("Token não disponível")
+            st.error("❌ Token não disponível")
         
         st.write(f"**DataFrame Info:**")
         st.write(f"- Shape: {df.shape}")
         st.write(f"- Memory: {df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
         st.write(f"- Colunas: {list(df.columns)}")
+        
+        if 'Data de Solicitação' in df.columns:
+            st.write(f"**Data de Solicitação:**")
+            st.write(f"- Tipo: {df['Data de Solicitação'].dtype}")
+            st.write(f"- Mínimo: {df['Data de Solicitação'].min()}")
+            st.write(f"- Máximo: {df['Data de Solicitação'].max()}")
+            st.write(f"- Nulos: {df['Data de Solicitação'].isnull().sum()}")
         
         # Mostrar primeiras e últimas linhas
         st.write("**Amostra dos Dados:**")
@@ -568,16 +693,6 @@ if st.session_state.debug_mode:
         
         with tab_debug2:
             st.dataframe(df.tail(5), use_container_width=True)
-        
-        # Informações de tipos
-        st.write("**Tipos de Dados:**")
-        tipos_df = pd.DataFrame({
-            'Coluna': df.columns,
-            'Tipo': df.dtypes.values,
-            'Exemplo': [str(df[col].iloc[0])[:50] + '...' if len(str(df[col].iloc[0])) > 50 else str(df[col].iloc[0]) 
-                       for col in df.columns]
-        })
-        st.dataframe(tipos_df, use_container_width=True)
 
 # =========================================================
 # 10. RODAPÉ
@@ -592,6 +707,8 @@ with footer_col1:
 
 with footer_col2:
     st.caption(f"📊 {total_linhas} registros | {total_colunas} colunas")
+    if filtros_ativos and len(df_filtrado) > 0:
+        st.caption(f"🎯 Filtrados: {len(df_filtrado)} registros")
 
 with footer_col3:
     st.caption("🔄 Atualiza a cada 1 minuto | 📧 cristini.cordesco@ideatoreamericas.com")
