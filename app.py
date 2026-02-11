@@ -6,8 +6,15 @@ import msal
 from datetime import datetime, timedelta
 import pytz
 import time
-import plotly.express as px
-import plotly.graph_objects as go
+
+# TENTAR IMPORTAR PLOTLY, SE NÃO CONSEGUIR, USA FALLBACK
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("⚠️ Plotly não instalado. Gráficos serão exibidos em formato alternativo.")
 
 # =========================================================
 # CONFIGURAÇÕES INICIAIS
@@ -103,7 +110,16 @@ st.markdown("""
         border-left: 5px solid #667eea;
     }
     
-    /* Divisores */
+    /* Gráfico alternativo */
+    .chart-fallback {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 30px;
+        text-align: center;
+        color: #666;
+        border: 2px dashed #ccc;
+    }
+    
     hr {
         margin: 30px 0;
         border: 0;
@@ -790,7 +806,7 @@ with col_r8:
     st.markdown(ranking_html, unsafe_allow_html=True)
 
 # =========================================================
-# GRÁFICOS DE TENDÊNCIA
+# GRÁFICOS DE TENDÊNCIA (VERSÃO SEM PLOTLY)
 # =========================================================
 
 st.markdown("---")
@@ -801,18 +817,49 @@ if coluna_data and coluna_data in df_periodo.columns:
     df_tendencia = df_periodo.groupby(df_periodo[coluna_data].dt.date).size().reset_index()
     df_tendencia.columns = ['Data', 'Quantidade']
     
-    # Gráfico de linha
-    fig = px.line(df_tendencia, x='Data', y='Quantidade', 
-                  title=f'Solicitações por Dia - {data_inicio.strftime("%d/%m")} a {data_fim.strftime("%d/%m")}',
-                  markers=True)
-    
-    fig.update_layout(
-        height=400,
-        plot_bgcolor='white',
-        hovermode='x unified'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    if PLOTLY_AVAILABLE:
+        # Versão com Plotly (gráfico bonito)
+        fig = px.line(df_tendencia, x='Data', y='Quantidade', 
+                      title=f'Solicitações por Dia - {data_inicio.strftime("%d/%m")} a {data_fim.strftime("%d/%m")}',
+                      markers=True)
+        
+        fig.update_layout(
+            height=400,
+            plot_bgcolor='white',
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        # Versão alternativa sem Plotly (usando st.bar_chart)
+        st.info("📊 **Gráfico de Tendência** (Plotly não instalado - usando visualização alternativa)")
+        
+        # Mostrar como tabela e gráfico simples
+        col_graph1, col_graph2 = st.columns([3, 2])
+        
+        with col_graph1:
+            st.bar_chart(df_tendencia.set_index('Data'), height=400)
+        
+        with col_graph2:
+            st.markdown("**📈 Resumo do Período:**")
+            
+            # Estatísticas
+            media = df_tendencia['Quantidade'].mean()
+            maximo = df_tendencia['Quantidade'].max()
+            data_max = df_tendencia.loc[df_tendencia['Quantidade'].idxmax(), 'Data']
+            minimo = df_tendencia['Quantidade'].min()
+            data_min = df_tendencia.loc[df_tendencia['Quantidade'].idxmin(), 'Data']
+            total = df_tendencia['Quantidade'].sum()
+            
+            st.markdown(f"""
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px;">
+                <p><strong>📊 Total no período:</strong> {total:,}</p>
+                <p><strong>📈 Média diária:</strong> {media:.1f}</p>
+                <p><strong>📆 Dias com dados:</strong> {len(df_tendencia)}</p>
+                <p><strong>🔺 Pico:</strong> {maximo} ({data_max.strftime('%d/%m')})</p>
+                <p><strong>🔻 Mínimo:</strong> {minimo} ({data_min.strftime('%d/%m')})</p>
+            </div>
+            """, unsafe_allow_html=True)
 else:
     st.info("ℹ️ Não foi possível gerar gráfico de tendência - coluna de data não encontrada")
 
