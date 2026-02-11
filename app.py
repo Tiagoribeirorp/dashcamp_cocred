@@ -135,16 +135,11 @@ def carregar_dados_excel_online():
 # =========================================================
 def calcular_altura_tabela(num_linhas, num_colunas):
     """Calcula altura ideal para a tabela"""
-    altura_base = 150  # pixels para cabeçalhos e controles
-    altura_por_linha = 35  # pixels por linha
-    altura_por_coluna = 2  # pixels extras por coluna
-    
-    # Altura baseada no conteúdo
+    altura_base = 150
+    altura_por_linha = 35
+    altura_por_coluna = 2
     altura_conteudo = altura_base + (num_linhas * altura_por_linha) + (num_colunas * altura_por_coluna)
-    
-    # Limitar a um máximo razoável para performance
-    altura_maxima = 2000  # 2000px = ~53 linhas visíveis de uma vez
-    
+    altura_maxima = 2000
     return min(altura_conteudo, altura_maxima)
 
 def converter_para_data(df, coluna):
@@ -156,58 +151,139 @@ def converter_para_data(df, coluna):
     return df
 
 # =========================================================
-# 4. INTERFACE PRINCIPAL
+# 4. SIDEBAR COMPLETA E SUPER FUNCIONAL
 # =========================================================
 
-# Título
-st.title("📊 Dashboard de Campanhas – SICOOB COCRED")
-st.caption(f"🔗 Conectado ao Excel Online | Aba: {SHEET_NAME} | Última atualização: {datetime.now().strftime('%H:%M:%S')}")
-
-# Sidebar
-st.sidebar.header("⚙️ Controles")
-
-# Controle de debug
-if 'debug_mode' not in st.session_state:
-    st.session_state.debug_mode = False
-
-st.session_state.debug_mode = st.sidebar.checkbox("🐛 Modo Debug", value=st.session_state.debug_mode)
-
-# Configurações de visualização
-st.sidebar.header("👁️ Visualização")
-linhas_por_pagina = st.sidebar.selectbox(
-    "Linhas por página:", 
-    ["50", "100", "200", "500", "Todas"],
-    index=1
-)
-
-# Botão de atualização FORÇADA
-if st.sidebar.button("🔄 ATUALIZAR AGORA (Forçar)", type="primary", use_container_width=True):
-    st.cache_data.clear()
-    st.rerun()
-
-# Status
-st.sidebar.markdown("---")
-st.sidebar.markdown("**📊 Status:**")
-
-# Testar conexão
-if st.sidebar.button("🔍 Testar Conexão", use_container_width=True):
+with st.sidebar:
+    # ========== CABEÇALHO ==========
+    st.markdown("""
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="color: #667eea; font-size: 28px; margin: 0;">📊 COCRED</h1>
+        <p style="color: #666; font-size: 12px; margin: 0;">Dashboard de Campanhas</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # ========== 1. CONTROLES DE ATUALIZAÇÃO ==========
+    st.markdown("### 🔄 **Atualização**")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🔄 Atualizar", type="primary", use_container_width=True):
+            st.cache_data.clear()
+            st.toast("✅ Cache limpo! Atualizando...")
+            time.sleep(1)
+            st.rerun()
+    
+    with col2:
+        if st.button("🗑️ Limpar Cache", type="secondary", use_container_width=True):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.toast("🧹 Cache completamente limpo!")
+            time.sleep(1)
+            st.rerun()
+    
+    # Status da conexão em tempo real
     token = get_access_token()
     if token:
-        st.sidebar.success("✅ API Conectada")
+        st.success("✅ **Conectado** | Token ativo", icon="🔌")
     else:
-        st.sidebar.error("❌ API Offline")
-
-# Link para Excel
-st.sidebar.markdown("---")
-st.sidebar.markdown("**📝 Editar Excel:**")
-st.sidebar.markdown(f"""
-[✏️ Abrir no Excel Online](https://agenciaideatore-my.sharepoint.com/:x:/g/personal/cristini_cordesco_ideatoreamericas_com/IQDMDcVdgAfGSIyZfeke7NFkAatm3fhI0-X4r6gIPQJmosY)
-
-**Lembre-se:**
-1. Edite e **SALVE** (Ctrl+S)
-2. Clique em **"ATUALIZAR AGORA"**
-3. Dados atualizam em **1 minuto**
-""")
+        st.error("❌ **Offline** | Falha na conexão", icon="⚠️")
+    
+    st.divider()
+    
+    # ========== 2. CONFIGURAÇÕES DE VISUALIZAÇÃO ==========
+    st.markdown("### 👁️ **Visualização**")
+    
+    # Linhas por página
+    linhas_por_pagina = st.selectbox(
+        "📋 Linhas por página:",
+        ["50", "100", "200", "500", "Todas"],
+        index=1,
+        help="Quantidade de registros exibidos por vez na tabela"
+    )
+    
+    # Modo compacto
+    modo_compacto = st.checkbox(
+        "📏 Modo compacto",
+        value=False,
+        help="Reduz espaçamentos para mostrar mais informações"
+    )
+    
+    if modo_compacto:
+        st.markdown("""
+        <style>
+            .block-container {padding-top: 1rem; padding-bottom: 0rem;}
+            .stMetric {padding: 0.5rem;}
+        </style>
+        """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # ========== 3. RESUMO EXECUTIVO ==========
+    st.markdown("### 📊 **Resumo Executivo**")
+    
+    # Estas métricas serão atualizadas após carregar os dados
+    # Por enquanto, placeholders
+    st.info("⏳ Carregando métricas...")
+    
+    st.divider()
+    
+    # ========== 4. FERRAMENTAS ==========
+    st.markdown("### 🛠️ **Ferramentas**")
+    
+    # Modo Debug
+    if 'debug_mode' not in st.session_state:
+        st.session_state.debug_mode = False
+    
+    debug_mode = st.checkbox(
+        "🐛 **Modo Debug**",
+        value=st.session_state.debug_mode,
+        help="Mostra informações técnicas detalhadas"
+    )
+    st.session_state.debug_mode = debug_mode
+    
+    # Auto-refresh
+    auto_refresh = st.checkbox(
+        "🔄 **Auto-refresh (60s)**",
+        value=False,
+        help="Atualiza automaticamente a cada 60 segundos"
+    )
+    
+    st.divider()
+    
+    # ========== 5. INFORMAÇÕES E LINKS ==========
+    st.markdown("### ℹ️ **Informações**")
+    
+    # Link para Excel
+    st.markdown("""
+    **📎 Links úteis:**
+    - [📊 Abrir Excel Online](https://agenciaideatore-my.sharepoint.com/:x:/g/personal/cristini_cordesco_ideatoreamericas_com/IQDMDcVdgAfGSIyZfeke7NFkAatm3fhI0-X4r6gIPQJmosY)
+    """)
+    
+    # Instruções rápidas
+    with st.expander("📖 **Como usar**", expanded=False):
+        st.markdown("""
+        1. **Filtros** - Use os filtros acima para refinar os dados
+        2. **Período** - Selecione datas para análise temporal
+        3. **Visualização** - Ajuste linhas por página
+        4. **Exportação** - Use os botões na área principal
+        5. **Atualização** - Clique em 'Atualizar' para novos dados
+        """)
+    
+    st.divider()
+    
+    # ========== 6. RODAPÉ DA SIDEBAR ==========
+    st.markdown("""
+    <div style="text-align: center; color: #666; font-size: 11px; padding: 10px 0;">
+        <p style="margin: 0;">Desenvolvido para</p>
+        <p style="margin: 0; font-weight: bold; color: #667eea;">SICOOB COCRED</p>
+        <p style="margin: 5px 0 0 0;">© 2026 - Ideatore</p>
+        <p style="margin: 5px 0 0 0;">v3.0.0</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # =========================================================
 # 5. CARREGAR E MOSTRAR DADOS
@@ -225,7 +301,6 @@ if df.empty:
 # Converter coluna de data de solicitação se existir
 if 'Data de Solicitação' in df.columns:
     df = converter_para_data(df, 'Data de Solicitação')
-    # Remover timezone se houver
     if pd.api.types.is_datetime64_any_dtype(df['Data de Solicitação']):
         df['Data de Solicitação'] = df['Data de Solicitação'].dt.tz_localize(None)
 
@@ -233,12 +308,80 @@ if 'Data de Solicitação' in df.columns:
 total_linhas = len(df)
 total_colunas = len(df.columns)
 
-st.success(f"✅ **{total_linhas} registros** carregados com sucesso!")
-st.info(f"📋 **Colunas:** {', '.join(df.columns.tolist()[:5])}{'...' if len(df.columns) > 5 else ''}")
+# =========================================================
+# 6. ATUALIZAR SIDEBAR COM MÉTRICAS REAIS
+# =========================================================
+
+with st.sidebar:
+    # Substituir o placeholder de resumo executivo com métricas reais
+    st.markdown("### 📊 **Resumo Executivo**")
+    
+    col_m1, col_m2 = st.columns(2)
+    
+    with col_m1:
+        st.metric(
+            label="📋 Total",
+            value=f"{total_linhas:,}",
+            delta=None
+        )
+    
+    with col_m2:
+        if 'Status' in df.columns:
+            concluidos = len(df[df['Status'].str.contains('Concluído|Aprovado', na=False, case=False)])
+            percentual = (concluidos / total_linhas * 100) if total_linhas > 0 else 0
+            st.metric(
+                label="✅ Concluídos",
+                value=f"{concluidos:,}",
+                delta=f"{percentual:.0f}%"
+            )
+        else:
+            st.metric(label="✅ Concluídos", value="N/A")
+    
+    col_m3, col_m4 = st.columns(2)
+    
+    with col_m3:
+        if 'Prioridade' in df.columns:
+            alta = len(df[df['Prioridade'].str.contains('Alta', na=False, case=False)])
+            st.metric(
+                label="🔴 Alta",
+                value=f"{alta:,}",
+                delta=None
+            )
+        else:
+            st.metric(label="🔴 Alta", value="N/A")
+    
+    with col_m4:
+        if 'Data de Solicitação' in df.columns:
+            hoje = datetime.now().date()
+            df_hoje = df[pd.to_datetime(df['Data de Solicitação']).dt.date == hoje]
+            st.metric(
+                label="📅 Hoje",
+                value=len(df_hoje),
+                delta=None
+            )
+        else:
+            st.metric(label="📅 Hoje", value="N/A")
+    
+    st.divider()
+    
+    # Atualizar timestamp
+    st.caption(f"🕐 **Última atualização:**")
+    st.caption(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
 
 # =========================================================
-# 6. VISUALIZAÇÃO COMPLETA DOS DADOS (COM PAGINAÇÃO)
+# 7. INTERFACE PRINCIPAL
 # =========================================================
+
+# Título
+st.title("📊 Dashboard de Campanhas – SICOOB COCRED")
+st.caption(f"🔗 Conectado ao Excel Online | Aba: {SHEET_NAME}")
+
+# =========================================================
+# 8. VISUALIZAÇÃO COMPLETA DOS DADOS (COM PAGINAÇÃO)
+# =========================================================
+
+st.success(f"✅ **{total_linhas} registros** carregados com sucesso!")
+st.info(f"📋 **Colunas:** {', '.join(df.columns.tolist()[:5])}{'...' if len(df.columns) > 5 else ''}")
 
 st.header("📋 Dados Completos")
 
@@ -247,12 +390,8 @@ tab1, tab2, tab3 = st.tabs(["📊 Dados Completos", "📈 Estatísticas", "🔍 
 
 with tab1:
     if linhas_por_pagina == "Todas":
-        # Mostrar TODAS as linhas de uma vez
         altura_tabela = calcular_altura_tabela(total_linhas, total_colunas)
-        
         st.subheader(f"📋 Todos os {total_linhas} registros")
-        
-        # Mostrar dataframe completo
         st.dataframe(
             df,
             height=altura_tabela,
@@ -260,21 +399,17 @@ with tab1:
             hide_index=False,
             column_config=None
         )
-        
         if altura_tabela >= 2000:
             linhas_visiveis = int((2000 - 150) / 35)
             st.info(f"ℹ️ Mostrando {linhas_visiveis} de {total_linhas} linhas por vez. Use o scroll para navegar.")
         
     else:
-        # Paginação manual
         linhas_por_pagina = int(linhas_por_pagina)
         total_paginas = (total_linhas - 1) // linhas_por_pagina + 1
         
-        # Inicializar página na session_state
         if 'pagina_atual' not in st.session_state:
             st.session_state.pagina_atual = 1
         
-        # Controles de navegação
         col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([2, 1, 1, 2])
         
         with col_nav1:
@@ -293,7 +428,6 @@ with tab1:
                     st.rerun()
         
         with col_nav4:
-            # Seletor de página direto
             nova_pagina = st.number_input(
                 "Ir para página:", 
                 min_value=1, 
@@ -305,13 +439,11 @@ with tab1:
                 st.session_state.pagina_atual = nova_pagina
                 st.rerun()
         
-        # Calcular índices
         inicio = (st.session_state.pagina_atual - 1) * linhas_por_pagina
         fim = min(inicio + linhas_por_pagina, total_linhas)
         
         st.write(f"**Mostrando linhas {inicio + 1} a {fim} de {total_linhas}**")
         
-        # Mostrar dataframe paginado
         altura_pagina = calcular_altura_tabela(linhas_por_pagina, total_colunas)
         
         st.dataframe(
@@ -321,7 +453,6 @@ with tab1:
             hide_index=False
         )
     
-    # Contadores
     col_count1, col_count2, col_count3 = st.columns(3)
     with col_count1:
         st.metric("📈 Total de Linhas", total_linhas)
@@ -338,14 +469,12 @@ with tab1:
             st.metric("📅 Última Atualização", datetime.now().strftime('%d/%m/%Y'))
 
 with tab2:
-    # Estatísticas
     st.subheader("📈 Estatísticas dos Dados")
     
     col_stat1, col_stat2 = st.columns(2)
     
     with col_stat1:
         st.write("**Resumo Numérico:**")
-        # Filtrar apenas colunas numéricas
         colunas_numericas = df.select_dtypes(include=['number']).columns
         if len(colunas_numericas) > 0:
             st.dataframe(df[colunas_numericas].describe(), use_container_width=True, height=300)
@@ -364,19 +493,16 @@ with tab2:
         })
         st.dataframe(info_df, use_container_width=True, height=400)
     
-    # Distribuição por colunas importantes
     st.subheader("📊 Distribuições")
     
     cols_dist = st.columns(2)
     
-    # Status
     if 'Status' in df.columns:
         with cols_dist[0]:
             st.write("**Distribuição por Status:**")
             status_counts = df['Status'].value_counts()
             st.bar_chart(status_counts)
     
-    # Prioridade
     if 'Prioridade' in df.columns:
         with cols_dist[1]:
             st.write("**Distribuição por Prioridade:**")
@@ -384,10 +510,8 @@ with tab2:
             st.bar_chart(prioridade_counts)
 
 with tab3:
-    # Pesquisa e filtros
     st.subheader("🔍 Pesquisa nos Dados")
     
-    # Pesquisa por texto
     texto_pesquisa = st.text_input(
         "🔎 Pesquisar em todas as colunas:", 
         placeholder="Digite um termo para buscar...",
@@ -395,10 +519,9 @@ with tab3:
     )
     
     if texto_pesquisa:
-        # Criar máscara de pesquisa
         mask = pd.Series(False, index=df.index)
         for col in df.columns:
-            if df[col].dtype == 'object':  # Apenas colunas de texto
+            if df[col].dtype == 'object':
                 try:
                     mask = mask | df[col].astype(str).str.contains(texto_pesquisa, case=False, na=False)
                 except:
@@ -408,17 +531,13 @@ with tab3:
         
         if len(resultados) > 0:
             st.success(f"✅ **{len(resultados)} resultado(s) encontrado(s):**")
-            
-            # Altura dinâmica para resultados
             altura_resultados = calcular_altura_tabela(len(resultados), len(resultados.columns))
-            
             st.dataframe(
                 resultados, 
                 use_container_width=True, 
                 height=min(altura_resultados, 800)
             )
             
-            # Botão para exportar resultados
             if st.button("📥 Exportar Resultados", key="export_resultados"):
                 csv = resultados.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
@@ -433,7 +552,7 @@ with tab3:
         st.info("👆 Digite um termo acima para pesquisar nos dados")
 
 # =========================================================
-# 7. FILTROS AVANÇADOS (COM FILTRO DE DATA)
+# 9. FILTROS AVANÇADOS (COM FILTRO DE DATA)
 # =========================================================
 
 st.header("🎛️ Filtros Avançados")
@@ -471,20 +590,16 @@ if 'Produção' in df.columns:
 with filtro_cols[3]:
     st.markdown("**📅 Data Solicitação**")
     
-    # Verificar se existe coluna de data
     if 'Data de Solicitação' in df.columns:
-        # Garantir que é datetime
         if not pd.api.types.is_datetime64_any_dtype(df['Data de Solicitação']):
             df['Data de Solicitação'] = pd.to_datetime(df['Data de Solicitação'], errors='coerce')
         
-        # Remover datas nulas
         datas_validas = df['Data de Solicitação'].dropna()
         
         if not datas_validas.empty:
             data_min = datas_validas.min().date()
             data_max = datas_validas.max().date()
             
-            # Opções de período rápido
             periodo_opcao = st.selectbox(
                 "Período:",
                 ["Todos", "Hoje", "Esta semana", "Este mês", "Últimos 30 dias", "Personalizado"],
@@ -567,7 +682,6 @@ if filtros_ativos:
             height=min(altura_filtrada, 800)
         )
         
-        # Estatísticas dos filtros
         col_filt1, col_filt2, col_filt3 = st.columns(3)
         
         with col_filt1:
@@ -582,7 +696,6 @@ if filtros_ativos:
                 st.metric("📅 Período", 
                          f"{filtros_ativos['data_inicio'].strftime('%d/%m')} a {filtros_ativos['data_fim'].strftime('%d/%m')}")
         
-        # Botão para limpar filtros
         if st.button("🧹 Limpar Todos os Filtros", type="secondary", use_container_width=True):
             for key in list(st.session_state.keys()):
                 if key.startswith('filtro_') or key in ['periodo_data', 'data_ini', 'data_fim']:
@@ -594,18 +707,16 @@ else:
     st.info("👆 Use os filtros acima para refinar os dados")
 
 # =========================================================
-# 8. EXPORTAÇÃO (COM DADOS FILTRADOS)
+# 10. EXPORTAÇÃO (COM DADOS FILTRADOS)
 # =========================================================
 
 st.header("💾 Exportar Dados")
 
-# Dados para exportação (usar filtrados se existirem)
 df_exportar = df_filtrado if filtros_ativos and len(df_filtrado) > 0 else df
 
 col_exp1, col_exp2, col_exp3 = st.columns(3)
 
 with col_exp1:
-    # CSV
     csv = df_exportar.to_csv(index=False, encoding='utf-8-sig')
     st.download_button(
         label="📥 Download CSV",
@@ -617,11 +728,9 @@ with col_exp1:
     )
 
 with col_exp2:
-    # Excel
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_exportar.to_excel(writer, index=False, sheet_name='Dados')
-        # Adicionar aba de resumo
         resumo = pd.DataFrame({
             'Métrica': ['Total Registros', 'Total Colunas', 'Data Exportação', 'Filtros Aplicados'],
             'Valor': [len(df_exportar), len(df_exportar.columns), 
@@ -642,7 +751,6 @@ with col_exp2:
     )
 
 with col_exp3:
-    # JSON
     json_data = df_exportar.to_json(orient='records', force_ascii=False, date_format='iso')
     st.download_button(
         label="📥 Download JSON",
@@ -654,7 +762,7 @@ with col_exp3:
     )
 
 # =========================================================
-# 9. DEBUG INFO (apenas se ativado)
+# 11. DEBUG INFO (apenas se ativado)
 # =========================================================
 
 if st.session_state.debug_mode:
@@ -683,7 +791,6 @@ if st.session_state.debug_mode:
             st.write(f"- Máximo: {df['Data de Solicitação'].max()}")
             st.write(f"- Nulos: {df['Data de Solicitação'].isnull().sum()}")
         
-        # Mostrar primeiras e últimas linhas
         st.write("**Amostra dos Dados:**")
         
         tab_debug1, tab_debug2 = st.tabs(["Primeiras 5", "Últimas 5"])
@@ -695,7 +802,7 @@ if st.session_state.debug_mode:
             st.dataframe(df.tail(5), use_container_width=True)
 
 # =========================================================
-# 10. RODAPÉ
+# 12. RODAPÉ
 # =========================================================
 
 st.divider()
@@ -714,11 +821,8 @@ with footer_col3:
     st.caption("🔄 Atualiza a cada 1 minuto | 📧 cristini.cordesco@ideatoreamericas.com")
 
 # =========================================================
-# 11. AUTO-REFRESH (opcional)
+# 13. AUTO-REFRESH (opcional)
 # =========================================================
-
-# Auto-refresh a cada 60 segundos (opcional)
-auto_refresh = st.sidebar.checkbox("🔄 Auto-refresh (60s)", value=False, key="auto_refresh")
 
 if auto_refresh:
     refresh_placeholder = st.empty()
