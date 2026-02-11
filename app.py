@@ -187,8 +187,8 @@ st.caption(f"🔗 Conectado ao Excel Online | Aba: {SHEET_NAME}")
 # Sidebar - Controles
 st.sidebar.header("⚙️ Controles")
 
-# Botão de atualização
-if st.sidebar.button("🔄 Atualizar agora", use_container_width=True, type="primary"):
+# Botão de atualização - CORRIGIDO AQUI (1ª ocorrência)
+if st.sidebar.button("🔄 Atualizar agora", width='stretch', type="primary"):  # <-- CORREÇÃO
     st.cache_data.clear()
     st.rerun()
 
@@ -196,8 +196,8 @@ if st.sidebar.button("🔄 Atualizar agora", use_container_width=True, type="pri
 st.sidebar.markdown("---")
 st.sidebar.markdown("**🔗 Status da Conexão:**")
 
-# Testar conexão
-if st.sidebar.button("🔍 Testar Conexão API", use_container_width=True):
+# Testar conexão - CORRIGIDO AQUI (2ª ocorrência)
+if st.sidebar.button("🔍 Testar Conexão API", width='stretch'):  # <-- CORREÇÃO
     token = get_access_token()
     if token:
         st.sidebar.success("✅ API: Conectada")
@@ -260,6 +260,11 @@ if df.empty:
     
     # Fallback: Upload manual
     st.warning("⚠️ Enquanto isso, use upload manual:")
+    
+    # Uploader - CORRIGIDO AQUI (3ª ocorrência, se houver)
+    # Verificando se há mais botões ou componentes com use_container_width
+    # Parece que não há no uploader, mas se houver um botão aqui:
+    
     uploaded_file = st.file_uploader("📤 Upload do Excel", type=["xlsx"])
     
     if uploaded_file:
@@ -288,6 +293,9 @@ if "Prazo em dias" in df.columns:
     df["Prazo em dias"] = pd.to_numeric(df["Prazo em dias"], errors="coerce")
 
 # ... Continue com TODO o seu código restante ...
+
+# ATENÇÃO: Se você tiver mais botões ou componentes Streamlit no seu código de processamento,
+# verifique e substitua use_container_width por width='stretch' ou width='content'
 
 # =========================================================
 # 6. RODAPÉ COM INFORMAÇÕES
